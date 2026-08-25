@@ -2,7 +2,7 @@
 # rather than being emulated once per target architecture. Go cross-compiles natively, so
 # emulation only ever bought a slower compiler: in release run 32312695295 the amd64 build
 # took 117s and the identical arm64 build took 1027s of the same job.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 WORKDIR /src
 
 # Above the target-architecture arguments on purpose. Module contents do not depend on

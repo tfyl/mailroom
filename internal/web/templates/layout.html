@@ -1,0 +1,68 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Both themes are served in one stylesheet and chosen by prefers-color-scheme. Declaring
+     it here is what makes the browser's own furniture — form controls, scrollbars, the flash
+     of white before first paint — follow the same preference. -->
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}} · mailroom</title>
+<link rel="stylesheet" href="{{.Stylesheet}}">
+<!-- The only script there is: one external file, deferred, from this origin. Every page
+     links it and most pages use none of it — it enhances controls that already work without
+     it, so a page whose script never arrives behaves the way the page did before there was
+     one. Nothing inline, here or anywhere: see docs/ui.md. -->
+<script src="{{.Script}}" defer></script>
+</head>
+<body>
+<a class="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-3 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:ring-1" href="#content">Skip to content</a>
+<header class="app-header">
+  <div>
+    <span class="app-brand">mailroom</span>
+    {{if .SignedInAs}}
+    <nav class="app-nav" aria-label="Sections">
+      <a href="/accounts" {{if eq .Nav "accounts"}}aria-current="page"{{end}}>Mailboxes</a>
+      <a href="/grants" {{if eq .Nav "grants"}}aria-current="page"{{end}}>Grants</a>
+      <a href="/held" {{if eq .Nav "held"}}aria-current="page"{{end}}>Held{{if .HeldCount}}
+        <span class="nav-count">{{.HeldCount}}</span>{{end}}</a>
+      <a href="/audit" {{if eq .Nav "audit"}}aria-current="page"{{end}}>Audit</a>
+      {{if .IsOwner}}<a href="/invites" {{if eq .Nav "invites"}}aria-current="page"{{end}}>Invites</a>{{end}}
+    </nav>
+    <span class="ms-auto text-sm text-muted-foreground">{{.SignedInAs}}</span>
+    {{end}}
+  </div>
+</header>
+<main id="content" class="app-main">
+{{template "content" .}}
+</main>
+<!-- Section 13 is the reason this program is under the AGPL rather than the GPL, and it asks
+     that people who interact with the program over a network be offered its source. mailroom
+     is only ever run as a network service, so this footer is where that offer is actually
+     made. It hangs off the layout so every page carries it, including the sign-in page: a
+     stranger being asked to sign in has already interacted with the thing. The version is
+     named beside the link because a link to a branch that moves is not the *corresponding*
+     source of what is running here — sourceURL in web.go resolves the rest. -->
+<footer class="app-footer">
+  <p>mailroom <span class="mono">{{.Version}}</span> is free software under the GNU Affero
+    General Public License, version 3. <a href="{{.SourceURL}}">Get the source</a>.</p>
+</footer>
+</body>
+</html>{{end}}
+
+{{/* The two marks the alerts use. Kept here so every page draws the same one, and inline so
+     they cost no request under a policy that would refuse one anyway.
+
+     Both are Lucide's, copied by hand rather than vendored by a script — two paths are not
+     worth a build step, which is also why there is no version beside the licence the way
+     there is for Basecoat. ISC asks for its copyright and permission notice to appear in all
+     copies, and an inline icon is copied into every page that renders it, so each define
+     carries the notice with it. The full text of both licences is in
+     internal/web/assets/lucide/LICENSE.md; keep the lines below agreeing with it. */}}
+{{define "iconInfo"}}<!-- Lucide "info".
+     ISC, Copyright (c) 2026 Lucide Icons and Contributors.
+     Derived from Feather: MIT, Copyright (c) 2013-present Cole Bemis. --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>{{end}}
+
+{{define "iconAlert"}}<!-- Lucide "triangle-alert".
+     ISC, Copyright (c) 2026 Lucide Icons and Contributors.
+     Derived from Feather: MIT, Copyright (c) 2013-present Cole Bemis. --><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>{{end}}

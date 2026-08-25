@@ -1,0 +1,39 @@
+name: Something is broken
+description: mailroom does something other than what it says it does.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **If this is a security vulnerability, do not file it here.** Report it privately
+        through [GitHub's advisory form](https://github.com/tfyl/mailroom/security/advisories/new);
+        [SECURITY.md](https://github.com/tfyl/mailroom/blob/main/SECURITY.md) says what is in
+        scope. A public issue tells everybody running mailroom before they can update.
+
+        Please keep real addresses, hostnames and tokens out of anything you paste.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+      description: Logs and the exact request or click that produced it help more than a summary does.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The footer of any page shows it, and `mailroom version` prints it.
+      placeholder: v0.1.0, or the image digest you pinned
+    validations:
+      required: true
+
+  - type: input
+    id: setup
+    attributes:
+      label: Provider and sign-in method
+      description: Which mailbox provider it involves, and what MAILROOM_AUTH_PROVIDERS is set to.
+      placeholder: Gmail, signed in with forward auth behind Authelia
+    validations:
+      required: false

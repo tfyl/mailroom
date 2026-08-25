@@ -1,0 +1,20 @@
+Copyright (C) 2026 tfyl <https://github.com/tfyl>
+
+This file exists because AGPL-3.0 assigns copyright to a holder it cannot name for you, and
+LICENSE is the licence text rather than a statement about this work. The AGPL's own "How to
+Apply" appendix asks for a notice like the one above; keeping it here rather than in LICENSE
+leaves that file byte-identical to the licence as published, which matters if anybody ever
+diffs it.
+
+mailroom is free software: you can redistribute it and/or modify it under the terms of the
+GNU Affero General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+Affero General Public License for more details. You should have received a copy of it along
+with this program; if not, see <https://www.gnu.org/licenses/>.
+
+Section 13 is the reason this licence was chosen. Running a modified mailroom as a network
+service — which is the only way anybody runs it — obliges you to offer your users the source
+of your modified version.

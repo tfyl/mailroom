@@ -1,0 +1,92 @@
+/* Basecoat vega — Field. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .fieldset {
+    @apply gap-6 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3;
+  }
+
+  .fieldset > legend {
+    @apply mb-3 font-medium data-[variant=label]:text-sm data-[variant=legend]:text-base;
+  }
+
+  .fieldset > :is([role='group'], [role='radiogroup']):not(.field),
+  .field > :is(fieldset, [role='group'], [role='radiogroup']):not(.field) {
+    @apply gap-7;
+
+    &[role='radiogroup'],
+    &:has(> .field > input[type='checkbox']:not([role='switch'])),
+    &:has(> .field > input[type='radio']),
+    &[data-slot='checkbox-group'],
+    &[data-slot='radio-group'] {
+      @apply gap-3;
+    }
+  }
+
+  :is(.fieldset, .field) > :is([role='group'], [role='radiogroup']):not(.field) > :is([role='group'], [role='radiogroup']):not(.field),
+  .field > fieldset:not(.field) > :is([role='group'], [role='radiogroup']):not(.field) {
+    @apply gap-4;
+  }
+
+  .field {
+    @apply data-invalid:text-destructive data-[invalid=true]:text-destructive gap-3;
+  }
+
+  .field > section {
+    @apply gap-1;
+  }
+
+  .field > label,
+  .field > section > label,
+  label:has(> .field) {
+    @apply has-[:checked]:bg-primary/5 has-[:checked]:border-primary/30 dark:has-[:checked]:border-primary/20 dark:has-[:checked]:bg-primary/10 gap-2 leading-snug in-data-[disabled=true]:opacity-50;
+  }
+
+  .field > label:has(input[type='radio']),
+  .field > label:has(input[type='checkbox']),
+  .field > label:has(input[role='switch']),
+  .field > label:has(> .field),
+  label:has(> .field) {
+    @apply rounded-md border;
+  }
+
+  .field > label:has(input[type='radio']),
+  .field > label:has(input[type='checkbox']),
+  .field > label:has(input[role='switch']) {
+    @apply p-3;
+  }
+
+  :is(.field > label, label:has(> .field)) > .field {
+    @apply p-3;
+  }
+  .field h2,
+  .field h3 {
+    @apply gap-2 leading-snug text-sm font-medium in-data-[disabled=true]:opacity-50;
+  }
+
+  .fieldset legend + p,
+  .field > p,
+  .field section > p {
+    @apply text-muted-foreground text-start text-sm [[data-variant=legend]+&]:-mt-1.5;
+  }
+
+  .fieldset > legend[data-variant='label'] {
+    @apply mb-0;
+  }
+
+  .fieldset > legend:not([data-variant]) + p,
+  .fieldset > legend[data-variant='legend'] + p {
+    @apply -mt-1.5;
+  }
+
+  .field-separator {
+    @apply -my-2 h-5 text-sm in-data-[variant=outline]:-mb-2;
+  }
+
+  .field-separator > span {
+    @apply text-muted-foreground px-2;
+  }
+
+  .field [role="alert"] {
+    @apply text-destructive text-sm;
+  }
+
+}

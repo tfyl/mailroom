@@ -1,0 +1,33 @@
+# The Tailwind standalone binary `make css` downloads. It is over a hundred megabytes, the
+# image build has no use for it — the stylesheet it produces is committed and embedded — and
+# a build context that carries it is a slower build for nothing.
+.tools/
+
+.git/
+
+# Everything below is excluded because the Dockerfile's build stage is `COPY . .`, so anything
+# in the context lands in a layer. None of it reaches the published image — the runtime stage
+# copies the binary and the staged data directory and nothing else — but a layer is not a
+# private place: `--target build` exports it, and the release workflow exports every stage to
+# the Actions cache.
+#
+# The two that matter are .env, which holds MAILROOM_ENCRYPTION_KEY, and the database, which
+# holds the mailbox credentials that key opens. Putting both in one layer is the one
+# combination the sealing is designed to prevent.
+#
+# Kept in step with .gitignore: a file worth keeping out of a commit is worth keeping out of a
+# build context, and only one of those two mistakes is easy to notice afterwards.
+.env
+.env.*
+/data/
+*.db
+*.db-*
+NOTES.local.md
+/tasks/
+*.pem
+*.key
+client_secret*.json
+credentials*.json
+*.tfstate
+*.tfstate.*
+.terraform/

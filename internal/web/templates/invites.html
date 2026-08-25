@@ -1,0 +1,125 @@
+{{define "content"}}
+<h1>Invites</h1>
+<p class="lede">
+  Links that let somebody sign in here and get an account of their own. {{.Explain}}
+</p>
+
+{{if not .InInvite}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <strong>Invites are not being consulted.</strong>
+  <section>
+    <p>
+      This instance is set to <span class="mono">{{.Policy}}</span>, so an invite decides
+      nothing when somebody signs in. Set <span class="mono">MAILROOM_SIGNUPS=invite</span> to
+      use them.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{if .NewCode}}
+{{/* The one moment this link exists in readable form. It is an input rather than a line of
+     text for the reason the MCP endpoint is: nothing here can select it for the reader, so
+     the field that can be focused and copied whole is the field that does not get copied
+     half. Only a hash is stored, so a botched copy costs a new invite. */}}
+<div class="alert mb-8">
+  {{template "iconInfo"}}
+  <strong>Send this link. It is shown once.</strong>
+  <section>
+    <div class="field copyable">
+      {{/* The alert's own heading is the visible label. A second one saying "invite link"
+           directly under "Send this link" is a line the eye has to read to discard. */}}
+      <label for="invite-link" class="sr-only">Invite link</label>
+      <input type="text" id="invite-link" value="{{.NewLink}}" readonly aria-readonly="true"
+             spellcheck="false" autocomplete="off">
+      <p>
+        Only a hash of the code is stored, so it cannot be shown again &mdash; close this page
+        without copying it and the invite has to be reissued. Whoever opens it signs in with
+        whichever method they like, and the invite binds to that identity.
+      </p>
+    </div>
+  </section>
+</div>
+{{end}}
+
+<h2>Issue an invite</h2>
+<div class="card max-w-lg">
+  <section>
+    <form method="post" action="/invites/create" class="grid gap-5">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <div class="field">
+        <label for="note">Who is it for</label>
+        <input type="text" id="note" name="note" placeholder="Priya, new laptop"
+               autocomplete="off" maxlength="120">
+        <p>A note for you rather than for them. It is how you tell the rows below apart, and
+          nobody following the link ever sees it.</p>
+      </div>
+      <div class="field">
+        <label for="expires">Expires</label>
+        <select id="expires" name="expires">
+          <option value="24h">In a day</option>
+          <option value="7d" selected>In a week</option>
+          <option value="30d">In a month</option>
+          <option value="never">Never</option>
+        </select>
+        <p>An invite that has not been used by then stops working. It can be revoked before
+          that from the list below.</p>
+      </div>
+      <button class="btn w-fit" type="submit">Create invite</button>
+    </form>
+  </section>
+</div>
+
+<h2>Issued</h2>
+{{if .Invites}}
+<div class="card" data-size="sm">
+  <section class="table-container p-0">
+    <table class="table">
+      <caption class="sr-only">Invites issued from this instance, newest first.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Who it is for</th>
+          <th scope="col">State</th>
+          <th scope="col">Created</th>
+          <th scope="col">Expires</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Invites}}
+        <tr>
+          <td>{{if .Note}}{{.Note}}{{else}}<span class="text-muted-foreground">no note</span>{{end}}</td>
+          <td>
+            {{if eq .State "open"}}<span class="badge" data-variant="success">open</span>
+            {{else}}<span class="badge" data-variant="outline">{{.State}}</span>{{end}}
+          </td>
+          <td class="tabular-nums text-muted-foreground">{{.CreatedAt.Format "2 Jan 2006"}}</td>
+          <td class="tabular-nums text-muted-foreground">
+            {{if .ExpiresAt}}{{.ExpiresAt.Format "2 Jan 2006"}}{{else}}never{{end}}
+          </td>
+          <td class="text-end">
+            {{if eq .State "open"}}
+            <form method="post" action="/invites/revoke">
+              <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-revoke" data-variant="ghost" data-size="sm" type="submit">Revoke</button>
+            </form>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+</div>
+<p class="prose mt-4">
+  Only an <span class="mono">open</span> invite can still be used. Revoking one takes effect
+  immediately, and a link that has already been redeemed cannot be used a second time by anyone.
+</p>
+{{else}}
+<div class="card">
+  <section class="empty py-6 text-sm text-muted-foreground">No invites issued yet.</section>
+</div>
+{{end}}
+{{end}}

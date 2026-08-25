@@ -1,0 +1,12 @@
+/* Basecoat vega — Label. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .field > label,
+  .label {
+    @apply gap-2 text-sm leading-none font-medium in-data-[disabled=true]:opacity-50 peer-disabled:opacity-50;
+  }
+
+  .field > section > label {
+    @apply gap-2 text-sm leading-snug font-medium in-data-[disabled=true]:opacity-50 peer-disabled:opacity-50;
+  }
+
+}

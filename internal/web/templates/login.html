@@ -1,0 +1,40 @@
+{{define "content"}}
+{{/* The only page an unauthenticated visitor sees, and the whole of it is one choice. A
+     narrow column held near the middle of the viewport, rather than a heading and a stack of
+     one-button cards in the top-left corner of a 64rem page. */}}
+<div class="signin">
+  <h1>Sign in</h1>
+  <p class="lede">
+    Signing in identifies you. It asks for no access to any mailbox &mdash; linking one is a
+    separate step afterwards, with its own consent.
+  </p>
+
+  {{if .Error}}
+  <div class="alert mb-4" data-variant="destructive" role="alert">
+    {{template "iconAlert"}}
+    <section><p>{{.Error}}</p></section>
+  </div>
+  {{end}}
+
+  {{$next := .Next}}
+  {{if .Methods}}
+  <div class="card" data-size="sm">
+    <section class="grid gap-2">
+      {{range .Methods}}
+        {{if eq .Kind "oidc"}}
+        <a class="btn w-full"
+           href="/auth/{{.ID}}/start{{if $next}}?next={{$next}}{{end}}">Continue with {{.Label}}</a>
+        {{end}}
+      {{end}}
+    </section>
+  </div>
+  {{else}}
+  <div class="card" data-size="sm">
+    <section class="prose">
+      <p>This instance authenticates through a proxy in front of it, so there is no sign-in page
+      here. If you are seeing this, the proxy did not pass an identity.</p>
+    </section>
+  </div>
+  {{end}}
+</div>
+{{end}}

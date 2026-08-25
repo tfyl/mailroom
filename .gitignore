@@ -1,0 +1,53 @@
+# Build output
+/mailroom
+/dist/
+*.exe
+# `go build` inside the notices generator's own module leaves its binary beside the source.
+# `make notices` uses `go run` and produces nothing, but the mistake is an easy one to make.
+/scripts/notices/notices
+
+# Local state — never commit; contains sealed credentials and grant history
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+*.key
+client_secret*.json
+credentials*.json
+# A captured Google console session is a live login, not a config file.
+*console-session*.json
+
+# Local working notes, not for the public history
+/tasks/
+/scratch/
+NOTES.local.md
+
+# Editor and OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Go
+/vendor/
+*.test
+coverage.out
+
+# Terraform working directories. Provider binaries run to hundreds of megabytes, and state
+# files hold resource detail that does not belong in a public repository. The dependency lock
+# file is deliberately not in this list: it pins provider versions and checksums, so committing
+# it is what makes a stranger's `terraform init` resolve the same providers this repository was
+# tested against.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Downloaded build tools. The Tailwind standalone binary is over a hundred megabytes and
+# `make css` fetches it on demand; nothing here belongs in the history.
+/.tools/

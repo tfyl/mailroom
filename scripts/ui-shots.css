@@ -1,0 +1,146 @@
+/* The contact sheet: every state the review covers, on one page, grouped by section.
+   Not part of the product — nothing here is served, and no page under internal/web links it.
+   scripts/ui-shots.mjs writes a sheet against these rules and screenshots the whole document.
+
+   The sheet is chrome around thumbnails, and the thumbnails are the real pages: each cell
+   holds an iframe of the rendered state at its full 1180 px width, CSS-scaled down and
+   clipped to its first screen. Scaling rather than re-rendering narrow is the point — a page
+   re-rendered at 233 px would be the mobile layout, and the sheet is asking whether the
+   desktop pages look like each other.
+
+   The ground is shadcn stone, the base colour the product's palette is built from
+   (internal/web/assets/theme.css), so the sheet reads as the same family as the UI on it.
+   Both themes are here and chosen by prefers-color-scheme, which is what the driver emulates
+   per sheet — the same mechanism the product uses, so the sheet and the pages inside it can
+   never disagree about which theme they are in.
+
+   The three numbers the driver needs to agree with — how wide a column is, how much of each
+   page is shown, and what that scales to — are set as custom properties on :root by the
+   driver, because it also has to size the iframe and lay the grid out to a known total width.
+   Everything else is here. */
+
+:root {
+  /* shadcn stone, as hex: the sheet is composited, not themed by the app's tokens. */
+  --stone-50: #fafaf9;
+  --stone-200: #e7e5e4;
+  --stone-400: #a8a29e;
+  --stone-500: #78716c;
+  --stone-600: #57534e;
+  --stone-800: #292524;
+  --stone-900: #1c1917;
+
+  --ground: #faf9f8;
+  --ink: var(--stone-900);
+  --muted: var(--stone-500);
+  --heading: var(--stone-600);
+  --rule: var(--stone-200);
+  --thumb-bg: #ffffff;
+  --thumb-border: var(--stone-200);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0c0a09;
+    --ink: var(--stone-50);
+    --muted: var(--stone-400);
+    --heading: #d6d3d1;
+    --rule: var(--stone-800);
+    --thumb-bg: var(--ground);
+    --thumb-border: var(--stone-800);
+  }
+}
+
+html {
+  background: var(--ground);
+}
+
+body {
+  margin: 0;
+  padding: var(--pad);
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  /* The sheet is as wide as the grid it holds and no wider, so the driver can screenshot the
+     document rather than measure a box inside it. */
+  width: max-content;
+}
+
+h1 {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.about {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+hr {
+  margin: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+h2 {
+  margin: 22px 0 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+
+/* Five to a row, always. A sheet that reflowed with its content would put a different number
+   of pages on a row every time one was added, and then every regeneration would be a diff of
+   the whole image rather than of the page that changed. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--col));
+  gap: 6px var(--gutter);
+}
+
+.name {
+  margin: 0 0 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 15px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The clip. The page inside is laid out in a viewport exactly as tall as the slice on show,
+   so a page that centres itself in the viewport — the sign-in column does — is centred in
+   what the thumbnail shows rather than half of it being below the cut. */
+.thumb {
+  position: relative;
+  overflow: hidden;
+  height: var(--thumb-h);
+  border: 1px solid var(--thumb-border);
+  background: var(--thumb-bg);
+}
+
+.thumb iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  display: block;
+  transform-origin: top left;
+  background: var(--thumb-bg);
+  color-scheme: light dark;
+}

@@ -1,0 +1,607 @@
+/* The furniture Basecoat has no component for: the page shell, the prose defaults, and the
+   two extra states this product needs a badge for. Everything else in the templates is a
+   Basecoat class or a Tailwind utility — read docs/ui.md before adding to this file. */
+
+@layer base {
+  /* Tailwind's preflight strips headings back to plain text, which is right for an app built
+     out of components and wrong for pages that are mostly prose with forms in them. Every
+     page here is the second kind, so the elements carry their own weight and the templates
+     stay free of a class on every <h1>. */
+  h1 {
+    @apply text-2xl font-semibold tracking-tight text-balance;
+  }
+
+  h2 {
+    @apply mt-10 mb-3 text-lg font-medium tracking-tight;
+  }
+
+  h3 {
+    @apply text-base font-medium tracking-tight;
+  }
+}
+
+@layer components {
+  /* --- Shell ------------------------------------------------------------------------- */
+
+  .app-header {
+    @apply border-b border-border bg-card;
+  }
+
+  .app-header > div {
+    @apply mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3;
+  }
+
+  .app-brand {
+    @apply font-mono text-sm font-semibold tracking-tight text-foreground;
+  }
+
+  .app-nav {
+    @apply flex flex-wrap items-center gap-1;
+  }
+
+  .app-nav a {
+    @apply rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground no-underline
+      transition-colors hover:bg-muted hover:text-foreground;
+  }
+
+  /* aria-current is what tells a screen reader which page this is, so the highlight hangs off
+     the same attribute rather than off a second class beside it. One fact, one place. */
+  .app-nav a[aria-current='page'] {
+    @apply bg-muted text-foreground;
+  }
+
+  /* How many privileged actions are waiting, carried in the nav so that a queue whose whole
+     point is that a person answers it is visible from wherever they happen to be. The number
+     is inside the link's text rather than positioned over it: a badge floating on a corner
+     needs a size the nav does not have, and this has to survive the link wrapping at 420px.
+     Colour does not carry it — the link says "Held" either way, and the count is a numeral. */
+  .nav-count {
+    @apply ms-1 inline-block min-w-5 rounded-full bg-warning/15 px-1.5 text-center
+           text-[0.7rem] font-semibold text-foreground tabular-nums;
+  }
+
+  .app-main {
+    @apply mx-auto max-w-5xl px-5 pt-8 pb-24;
+  }
+
+  /* Where the AGPL section 13 offer sits. Set as the quietest text in the UI on purpose: it
+     is a standing obligation rather than something to act on, and it is on every page, so at
+     any louder weight it would compete with the page above it. */
+  .app-footer {
+    @apply border-t border-border;
+  }
+
+  .app-footer > p {
+    @apply mx-auto max-w-5xl px-5 py-5 text-xs leading-relaxed text-muted-foreground;
+  }
+
+  /* The one link in this UI that is neither a nav item nor a button, and the first thing here
+     that leaves the instance. Tailwind's preflight makes an anchor inherit its colour and its
+     text-decoration, so without this it would be a run of grey text with no sign that it can
+     be followed — which for an offer of source is the whole of it not working. */
+  .app-footer a {
+    @apply text-foreground underline underline-offset-2 transition-colors
+           hover:text-foreground/80;
+  }
+
+  /* Signing in is one choice on an otherwise empty page, so the column is narrow and sits
+     near the middle of the viewport rather than in the top-left corner of a 64rem one. The
+     height is a floor, not a frame: a short viewport scrolls rather than clipping a button. */
+  .signin {
+    @apply mx-auto flex min-h-[58vh] w-full max-w-sm flex-col justify-center;
+  }
+
+  .signin > h1,
+  .signin > .lede {
+    @apply text-center;
+  }
+
+  .signin > .lede {
+    @apply mb-6;
+  }
+
+  /* --- Prose -------------------------------------------------------------------------- */
+
+  /* Capped at a readable measure rather than at the container. The explanatory copy on these
+     pages runs to several lines, and a 64rem column would set it in one and a half. */
+  .lede,
+  .prose {
+    @apply max-w-[68ch] text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .lede {
+    @apply mt-2 mb-8;
+  }
+
+  /* Inline literals: an env var, a tool name, a mailbox address. A shade smaller because a
+     monospace face at the same nominal size reads larger than the prose around it. */
+  .mono {
+    @apply font-mono text-[0.9em];
+  }
+
+  /* --- Status -------------------------------------------------------------------------- */
+
+  /* Basecoat ships primary, secondary, outline, destructive, ghost and link. A mailbox is
+     working or it is not, and neither of those is any of them. Tinted the way destructive is,
+     so all three read as one family at one weight rather than one of them shouting. The word
+     inside carries the meaning on its own; the colour only makes it findable. */
+  .badge[data-variant='success'] {
+    @apply bg-success/10 text-success dark:bg-success/15;
+  }
+
+  .badge[data-variant='warning'] {
+    @apply bg-warning/10 text-warning dark:bg-warning/15;
+  }
+
+  /* Basecoat's alert ships one variant, destructive, and this product has two kinds of bad
+     news. A name collision on the grants page is not a failure — nothing has gone wrong yet,
+     and the thing that would is the edit somebody is about to make on the wrong grant. That
+     is exactly what --warning means everywhere else here, so the alert says it in the same
+     colour as the badge, rather than being assembled out of a border utility on the page. */
+  .alert[data-variant='warning'] {
+    @apply border-warning/40 bg-warning/5 dark:bg-warning/10;
+  }
+
+  .alert[data-variant='warning'] > :is(h2, h3, h4, h5, h6, strong, [data-title]),
+  .alert[data-variant='warning'] > svg {
+    @apply text-warning;
+  }
+
+  /* A checkbox that makes the deployment less safe rather than more — connecting to an IMAP
+     server without TLS is the one here. Basecoat tints a ticked field in the primary colour,
+     which reads as confirmation; ticking this one is a warning and should look like one.
+
+     The box itself is left alone. A destructive-coloured checkbox loses its tick against its
+     own fill, and the row around it already says everything the colour has to say. */
+  .field > label[data-variant='destructive']:has(:checked) {
+    @apply border-destructive/40 bg-destructive/10;
+  }
+
+  /* The same argument one step down, for the capabilities the consent screen calls
+     privileged. Ticking `send` is not the same act as ticking `read`, and Basecoat tints
+     both in the primary colour — the colour this design system uses for confirmation. A
+     ticked privileged row is tinted like the badge that is already sitting on it. */
+  .field > label[data-variant='warning']:has(:checked) {
+    @apply border-warning/40 bg-warning/10;
+  }
+
+  /* Marks a row on the edit form as something the grant holds today, which is what turns a
+     form full of ticks into a readable change: a cleared box beside this mark is a removal,
+     a ticked box without one is a handover. Set like .optional — small, upright, and not
+     competing with the name beside it. */
+  .current {
+    @apply align-middle text-[0.7rem] font-normal tracking-wide text-muted-foreground
+           uppercase;
+  }
+
+  /* Basecoat's keycap is --muted-foreground on --muted, which is 4.4:1 in the light theme.
+     It is the same near-miss the grant id has and it is fixed the same way, because the
+     claim in docs/ui.md is that both palettes clear 4.5:1 and a key somebody is being told
+     to press is text like any other. The vendored component is left alone; this is the
+     product's own palette decision sitting on top of it. */
+  .kbd {
+    @apply text-foreground/75;
+  }
+
+  /* --- Progressive disclosure ------------------------------------------------------- */
+
+  /* <details> is the only disclosure a UI with no script can have, and unstyled it reads as
+     a raw browser control sitting among designed ones. This gives it the weight of a
+     secondary action: a row you can click, marked by a marker that turns as it opens.
+
+     wrap-anywhere because a summary names the thing it opens, and on the mailboxes page that
+     is an alias: up to 64 characters with nowhere to break. The panel these sit in clips its
+     overflow, so an unwrapped one is cut off mid-word with nothing to say that it was. */
+  details.advanced > summary {
+    @apply -mx-1 flex cursor-pointer list-none items-center gap-2 rounded-md px-1 py-1.5
+           text-sm font-medium wrap-anywhere text-muted-foreground select-none;
+  }
+
+  details.advanced > summary::-webkit-details-marker {
+    @apply hidden;
+  }
+
+  /* The marker is drawn rather than borrowed from the browser, so it is the same shape in
+     every engine and inherits the text colour in both themes. */
+  details.advanced > summary::before {
+    @apply inline-block transition-transform content-['\25B8'] text-base leading-none;
+  }
+
+  details.advanced[open] > summary::before {
+    @apply rotate-90;
+  }
+
+  details.advanced > summary:hover {
+    @apply text-foreground;
+  }
+
+  details.advanced > summary:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  details.advanced[open] > summary {
+    @apply mb-4;
+  }
+
+  /* Marks a field the form does not need. Saying so beside the label answers the question
+     before it is asked, which is cheaper than leaving someone to work it out from a
+     placeholder or, worse, from a failed submit. */
+  .optional {
+    @apply ml-1.5 align-middle text-[0.7rem] font-normal tracking-wide text-muted-foreground
+           uppercase;
+  }
+
+  /* --- Lists of rows -------------------------------------------------------------------- */
+
+  /* One panel with divided rows, rather than a card each. Mailboxes are a list of things at
+     one level and so are the ways to link one; a card apiece puts a shadow, a gap and a
+     rounded corner between items whose whole point is that they are alternatives. */
+  .stack {
+    @apply divide-y divide-border overflow-hidden rounded-xl bg-card text-sm shadow-xs
+           ring-1 ring-foreground/10;
+  }
+
+  /* --- A linked mailbox ----------------------------------------------------------------- */
+
+  .mailbox {
+    @apply px-4 py-3.5 sm:px-5;
+  }
+
+  .mailbox-head {
+    @apply flex items-start justify-between gap-x-4;
+  }
+
+  /* The address takes whatever is left and wraps inside it, so the badge is in the same place
+     on every row at every width. Left to wrap, it sits beside a short address and under a
+     long one, and a status you have to look for twice is not a status. */
+  .mailbox-head > :first-child {
+    @apply min-w-0 flex-1;
+  }
+
+  .mailbox-meta {
+    @apply mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground;
+  }
+
+  /* The separators are drawn rather than typed, so a screen reader reads three facts about
+     the mailbox and not two middle dots in between them. */
+  .mailbox-meta > span + span::before {
+    @apply mr-2 text-border content-['\00B7'];
+  }
+
+  .mailbox-manage {
+    @apply mt-2;
+  }
+
+  .manage {
+    @apply grid gap-6 pb-1;
+  }
+
+  /* Unlinking is in its own bordered block instead of beside Rename. The tint says this one
+     is different; the tick inside it is what makes it hard to reach by accident, which is
+     the part a bare button next to a routine control could never do. */
+  .danger {
+    @apply grid gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4
+           dark:bg-destructive/10;
+  }
+
+  .danger > h3 {
+    @apply text-destructive;
+  }
+
+  /* --- The provider chooser ------------------------------------------------------------- */
+
+  /* Four ways to link a mailbox, presented as a choice rather than as four stacked forms.
+     `<details name>` makes them mutually exclusive with no script at all: opening one closes
+     the others. A browser that has not implemented it yet falls back to letting several be
+     open, which is what this page did before, so nothing is lost by it. */
+  .chooser > details > summary {
+    @apply flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 transition-colors
+           select-none sm:px-5;
+  }
+
+  .chooser > details > summary::-webkit-details-marker {
+    @apply hidden;
+  }
+
+  /* Drawn, for the same reason the disclosure marker above is: one shape in every engine,
+     inheriting the text colour in both themes. */
+  .chooser > details > summary::after {
+    @apply ms-auto text-base leading-none text-muted-foreground transition-transform
+           content-['\25B8'];
+  }
+
+  .chooser > details[open] > summary::after {
+    @apply rotate-90;
+  }
+
+  .chooser > details > summary:hover {
+    @apply bg-muted/60;
+  }
+
+  .chooser > details > summary:focus-visible {
+    @apply outline-2 -outline-offset-2 outline-ring;
+  }
+
+  .chooser > details[open] > summary {
+    @apply bg-muted/40;
+  }
+
+  .choice {
+    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  }
+
+  .choice-name {
+    @apply font-medium text-foreground;
+  }
+
+  .choice-note {
+    @apply text-muted-foreground;
+  }
+
+  .choice-body {
+    @apply border-t border-border px-4 py-5 sm:px-5;
+  }
+
+  /* An OAuth provider asks for one thing: the alias. A field and its button belong on one
+     line at anything wider than a phone. */
+  .link-form {
+    @apply flex flex-wrap items-end gap-4;
+  }
+
+  .link-form > .field {
+    @apply min-w-56 flex-1;
+  }
+
+  /* --- The MCP endpoint ---------------------------------------------------------------- */
+
+  /* A field that exists to be copied out rather than filled in. Nothing can select it for the
+     reader — the UI ships no script — so it is a real input: focus it and ctrl/cmd-A takes
+     the whole value and nothing around it. readonly keeps a stray keypress from editing what
+     is then pasted, and the dashed border says so before one is tried. */
+  .endpoint input[readonly] {
+    @apply cursor-text border-dashed font-mono text-[0.8rem];
+  }
+
+  /* The same treatment for a value that is not an endpoint: an invite link, which exists in
+     readable form for exactly one response and cannot be reissued from the same invite. A
+     line of text is copied by dragging across it, and a dragged selection is what picks up a
+     trailing space or drops the last character. */
+  .copyable input[readonly] {
+    @apply cursor-text border-dashed font-mono text-[0.8rem];
+  }
+
+  /* --- Grants ---------------------------------------------------------------------------- */
+
+  /* A grant's scope as a definition list rather than as one comma-separated run: a labelled
+     row for the mailboxes it reaches, one for what it may do, and — where there is one — one
+     for the capabilities that cannot be taken back. The heading is what tells those apart, so
+     the distinction survives a reader who cannot see the tint on the badges under it. */
+  .facts {
+    @apply mt-3 grid gap-x-5 gap-y-2 text-sm sm:grid-cols-[6.5rem_minmax(0,1fr)];
+  }
+
+  .facts dt {
+    @apply text-muted-foreground;
+  }
+
+  .facts dd {
+    @apply m-0 flex flex-wrap items-center gap-1.5;
+  }
+
+  /* An alias is up to 64 characters with no space in it, and a badge is nowrap, w-fit and
+     shrink-0 — so one long mailbox name is a badge wider than the card, clipped by the
+     card's own overflow with nothing to say it was cut. These wrap instead. Short ones are
+     unchanged: the height only grows once there is a second line. */
+  .facts dd > .badge {
+    @apply h-auto max-w-full min-h-5 whitespace-normal wrap-anywhere;
+  }
+
+  /* The id, beside a name that is not unique. Set as a quiet monospace tag rather than as a
+     badge: it is a handle to match against, not a state, and it should be legible when
+     compared character by character against the one on the page you are about to act on.
+
+     Which is why the text is not --muted-foreground. Against --muted that pair is 4.4:1 in
+     the light theme — the one combination in shadcn's stone that misses the 4.5 this palette
+     holds itself to, and the last text here that should be the hardest to read. */
+  .grant-id {
+    @apply rounded bg-muted px-1.5 py-0.5 text-[0.75rem] font-normal text-foreground/75;
+  }
+
+  /* The dates, which are the least of what the card says and set accordingly. They answer
+     "which call was that" rather than "is this grant a problem" — the badges above answer
+     the second, which is why these can be this quiet. */
+  .grant-dates {
+    @apply mt-4 flex flex-col gap-y-1 text-xs text-muted-foreground sm:flex-row sm:flex-wrap
+           sm:items-center sm:gap-x-2;
+  }
+
+  /* The separator belongs to the row layout. Stacked on a narrow screen each fact is already
+     on a line of its own, where a leading dot is just a leading dot. */
+  @media (width >= 40rem) {
+    .grant-dates > span + span::before {
+      content: '·';
+      @apply me-2;
+    }
+  }
+
+  /* Revoke, where it sits beside a control that is not destructive. It is the word in the
+     colour of what it does rather than a filled button, because a filled destructive button
+     next to Edit is a target the size of Edit; the filled one belongs on the confirmation
+     page, where it is the only thing to press. Written at the variant's own specificity so
+     it wins against the ghost colours rather than depending on source order. */
+  .btn[data-variant='ghost'].btn-revoke {
+    @apply text-destructive hover:bg-destructive/10 hover:text-destructive
+           dark:hover:bg-destructive/20;
+  }
+
+  /* --- Deciding ------------------------------------------------------------------------- */
+
+  /* The footer of a page that asks a question it cannot un-ask: revoking, or handing a live
+     token something new. The ways out come first in the markup and sit at the near end; the
+     button that does the thing is at the far end with nothing beside it, so neither is one
+     slip away from the other and a keyboard reaches the escape first. */
+  .decision {
+    @apply mt-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 rounded-lg border
+           border-border bg-card px-4 py-4;
+  }
+
+  /* The button that performs the irreversible act, on the one page that exists to ask about
+     it. Basecoat's destructive variant is a tint — right where the button sits among others,
+     as Unlink does inside its own danger block, and wrong here: next to two outline escapes
+     the tinted one is the quietest control on the page, which inverts what the page is for.
+     Filled, it is what docs/ui.md has always described.
+
+     It also wraps. The label names what is about to happen — "Revoke <name>" — and a grant's
+     name is whatever the client sent, so a button that cannot wrap turns one long name into
+     a page that scrolls sideways on a phone. */
+  .decision .btn[data-variant='destructive'] {
+    @apply h-auto min-h-10 max-w-full bg-destructive py-2 text-start whitespace-normal
+           wrap-anywhere text-white hover:bg-destructive/90 dark:text-background;
+  }
+
+  /* An itemised change: one line per thing being added or taken away, each opening with the
+     sign of what it does. The mark is aria-hidden — the heading above the list already says
+     which direction these go, and a screen reader spelling out "plus" on every line would be
+     noise rather than information. */
+  .changes {
+    @apply m-0 grid list-none gap-4 p-0;
+  }
+
+  .changes > li {
+    @apply flex items-start gap-3;
+  }
+
+  .change-mark {
+    @apply mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted
+           font-mono text-sm leading-none text-muted-foreground;
+  }
+
+  /* What the grant gains, which is the whole reason the widen page exists, outlined in the
+     colour the rest of the page does not use so the eye lands on it first. A card is drawn
+     with a ring rather than a border, so the ring is what has to be recoloured — setting
+     border-color leaves it looking exactly as it did. */
+  .change-gains {
+    @apply ring-warning/60;
+  }
+
+  .change-gains .change-mark {
+    @apply bg-warning/15 text-warning;
+  }
+
+  /* What revoking costs, on the page that asks whether to. A list rather than a paragraph,
+     because these are three separate facts and one of them is reassurance. */
+  .consequences {
+    @apply grid max-w-[68ch] list-disc gap-2 ps-5 text-sm leading-relaxed
+           text-muted-foreground;
+  }
+
+  /* --- The audit log -------------------------------------------------------------------- */
+
+  /* Two links that behave as one control: everything, or only what was refused. Not a
+     Basecoat component — the ones that would fit are a tab strip and a toggle group, and both
+     of those are JavaScript. Two anchors and aria-current are the whole of it. */
+  .segmented {
+    @apply inline-flex rounded-md border border-border bg-card p-0.5;
+  }
+
+  .segmented a {
+    @apply rounded-[calc(var(--radius)-4px)] px-3 py-1.5 text-sm font-medium
+           text-muted-foreground no-underline transition-colors hover:text-foreground;
+  }
+
+  .segmented a[aria-current='page'] {
+    @apply bg-muted text-foreground;
+  }
+
+  /* A row of the log is scanned down a column, so the columns are given widths that hold
+     still between days and the times are set in figures that do not change width. */
+  .audit .day > th {
+    @apply bg-muted/50 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase;
+  }
+
+  .audit td:first-child,
+  .audit th:first-child {
+    @apply w-24;
+  }
+
+  /* The detail column is given a width of its own so that opening one row does not re-lay
+     out the whole table. An auto-sized column takes its width from the widest cell in it, so
+     a single disclosed recipient list would shove Outcome off to the right of every other
+     row on the page — the columns are the thing being scanned, and they have to hold still. */
+  .audit td:nth-child(4),
+  .audit th:nth-child(4) {
+    @apply w-80;
+  }
+
+  /* A row grows downwards when it opens, so its cells hang from the top rather than floating
+     in the middle of a panel the neighbouring cells know nothing about. */
+  .audit td {
+    @apply align-top;
+  }
+
+  /* The tool name is the summary. It is a table cell rather than a section heading, so this
+     is the disclosure marker and nothing else: no padding, no weight, no colour change. The
+     marker is drawn rather than borrowed from the browser for the reason details.advanced
+     draws its own — the shape is then the same in every engine. */
+  .audit details > summary {
+    @apply flex cursor-pointer list-none items-baseline gap-1.5 rounded-sm select-none;
+  }
+
+  .audit details > summary::-webkit-details-marker {
+    @apply hidden;
+  }
+
+  .audit details > summary::before {
+    @apply inline-block text-[0.6rem] leading-none text-muted-foreground
+           transition-transform content-['\25B8'];
+  }
+
+  .audit details[open] > summary::before {
+    @apply rotate-90;
+  }
+
+  .audit details > summary:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  /* The same definition list a grant's scope uses, set small enough to live inside a row. The
+     labels stay in a column of their own so the facts line up down the panel rather than
+     reading as one run of text.
+
+     Three properties are undone here and all three for the same reason. A table cell is
+     nowrap, which is right for a row of short values and wrong for a panel of long ones; the
+     width is capped to the column it sits in; and every value inside breaks anywhere. Without
+     all three, one address or one provider error sets the width of a column that every other
+     row on the page is scanned down. */
+  .audit details .facts {
+    @apply mt-2 mb-1 max-w-[19rem] gap-x-3 gap-y-1 text-xs whitespace-normal
+           sm:grid-cols-[4.5rem_minmax(0,1fr)];
+  }
+
+  .audit details .facts dd {
+    @apply min-w-0 gap-x-2 gap-y-1 wrap-anywhere;
+  }
+
+  .audit details .facts dd > * {
+    @apply max-w-full min-w-0 wrap-anywhere;
+  }
+
+  /* --- Held actions ----------------------------------------------------------------- */
+
+  /* The message a client wants sent, as it would go out. Preformatted, because a mail body's
+     own line breaks are the only formatting it has and reflowing them changes what somebody
+     is agreeing to; wrapped rather than scrolled sideways, because a long URL in a queued
+     message must not put a horizontal scrollbar on the page. Bounded in height for the same
+     reason the preview is bounded in bytes: this is a list of decisions, and one forty-line
+     message must not push the next one off the screen. */
+  .held-body {
+    @apply max-h-72 overflow-y-auto rounded-md border border-border bg-muted/40 px-3 py-2
+           font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere;
+  }
+
+  /* One waiting action. The tint is the warning token doing what it does everywhere else in
+     this UI: something needs attention and nothing has gone wrong. */
+  .held-pending {
+    @apply border-warning/40;
+  }
+}

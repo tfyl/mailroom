@@ -1,0 +1,124 @@
+/* The frame the README's screenshots are presented in.
+   Not part of the product: nothing here is served, and no page under internal/web links it.
+   It exists so a rendered page can be composed into a picture — inset on a ground, rounded,
+   lifted off it — with CSS rather than an image editor, so the presentation is a file
+   somebody can edit and regenerate rather than a one-off export nobody can reproduce.
+
+   The ground is stone, the same shadcn base colour the product's own palette is built from
+   (internal/web/assets/theme.css), so a screenshot sits with the UI inside it instead of
+   floating on an unrelated brand colour. Both themes are here and chosen by
+   prefers-color-scheme, which is what the driver emulates per shot — the same mechanism the
+   product uses, so the frame and the page it holds can never disagree about which theme
+   they are in. */
+
+:root {
+  /* shadcn stone, as hex: the frame is composited, not themed by the app's tokens. */
+  --stone-100: #f5f5f4;
+  --stone-200: #e7e5e4;
+  --stone-400: #a8a29e;
+  --stone-500: #78716c;
+  --stone-800: #292524;
+  --stone-900: #1c1917;
+
+  --ground: #eeece9;
+  --window-bg: #ffffff;
+  --window-border: rgba(28, 25, 23, 0.11);
+  --chrome-bg: var(--stone-100);
+  --chrome-border: rgba(28, 25, 23, 0.08);
+  --chrome-text: var(--stone-500);
+  --pill-bg: #ffffff;
+  --pill-border: rgba(28, 25, 23, 0.08);
+  --lift: 0 1px 1px rgba(28, 25, 23, 0.04), 0 10px 20px -10px rgba(28, 25, 23, 0.14),
+    0 32px 56px -20px rgba(28, 25, 23, 0.26);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0e0c0b;
+    --window-bg: var(--stone-900);
+    --window-border: rgba(255, 255, 255, 0.09);
+    --chrome-bg: #211e1c;
+    --chrome-border: rgba(255, 255, 255, 0.07);
+    --chrome-text: var(--stone-400);
+    --pill-bg: rgba(0, 0, 0, 0.28);
+    --pill-border: rgba(255, 255, 255, 0.06);
+    --lift: 0 1px 1px rgba(0, 0, 0, 0.4), 0 10px 20px -10px rgba(0, 0, 0, 0.55),
+      0 36px 64px -24px rgba(0, 0, 0, 0.75);
+  }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* The element the driver screenshots. Its own padding is the margin around the window, so
+   the crop is taken from this box and nothing has to be measured twice. */
+.stage {
+  width: max-content;
+  padding: 44px 40px 52px;
+  background: var(--ground);
+  font-family: var(--font-sans);
+}
+
+.window {
+  border: 1px solid var(--window-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--window-bg);
+  box-shadow: var(--lift);
+}
+
+/* Enough chrome to read as an application and no more. No traffic lights and no window
+   controls: those belong to somebody's operating system, and a drawing of them here would
+   be claiming this was photographed on a machine it was not. What is left is the one piece
+   of chrome that carries information — the address, which is where this page lives. */
+.chrome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  background: var(--chrome-bg);
+  border-bottom: 1px solid var(--chrome-border);
+}
+
+.chrome .url {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--chrome-text);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  padding: 5px 14px 6px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The crop. The page is loaded at its full natural height and this box shows the part of it
+   the shot is about, offset by the frame's own top margin — clipping rather than scaling, so
+   the text inside is at the size it renders at and stays legible in a README column. */
+.viewport {
+  position: relative;
+  overflow: hidden;
+  background: var(--window-bg);
+}
+
+.viewport iframe {
+  position: absolute;
+  left: 0;
+  border: 0;
+  display: block;
+  background: var(--window-bg);
+  color-scheme: light dark;
+}

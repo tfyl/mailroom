@@ -1,0 +1,37 @@
+# Pinning actions to a commit SHA stops a moved tag from changing what runs; it also stops
+# security updates arriving, which is the half people forget. This is the other half.
+#
+# The release workflow is the reason both matter: it holds packages: write and an
+# authenticated registry session, and publishes the image the deployment docs tell operators
+# to pull.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps"
+
+  # The two images the Dockerfile names. gcr.io/distroless/static-debian12:nonroot is the
+  # runtime image — the one the deployment docs tell operators to pull, carrying whatever CA
+  # bundle and base libraries the published binary runs against — and a floating tag is
+  # rebuilt upstream rather than moved here, so nothing in this repository ever notices that
+  # it changed. golang:1.26-alpine only builds, but it is the toolchain that compiles the
+  # published binary, which makes it worth watching for the same reason the actions are.
+  #
+  # Only / is listed. deploy/docker-compose.yml names this project's own image, which is
+  # published by the release workflow rather than consumed from anywhere.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps"

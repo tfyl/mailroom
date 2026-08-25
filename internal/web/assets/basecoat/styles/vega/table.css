@@ -1,0 +1,40 @@
+/* Basecoat vega — Table. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .table-container {
+    @apply relative w-full overflow-x-auto;
+  }
+
+  .table {
+    @apply w-full caption-bottom text-sm;
+  }
+
+  .table thead {
+    @apply [&_tr]:border-b;
+  }
+
+  .table tbody {
+    @apply [&_tr:last-child]:border-0;
+  }
+
+  .table tfoot {
+    @apply bg-muted/50 border-t font-medium [&>tr]:last:border-b-0;
+  }
+
+  .table tr {
+    @apply hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors;
+  }
+
+  .table th {
+    @apply text-foreground h-10 px-2 text-start align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pe-0;
+  }
+
+  .table td {
+    @apply p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pe-0;
+  }
+
+  .table caption {
+    @apply text-muted-foreground mt-4 text-sm;
+  }
+
+
+}

@@ -1,0 +1,236 @@
+{{define "content"}}
+<h1>Edit {{.Grant.Label}}</h1>
+<p class="lede">
+  Change what this grant reaches without the client authorising again. Its token keeps working,
+  and does whatever you leave here from its next call onwards.
+</p>
+
+{{if .Message}}
+{{if .Refused}}
+<div class="alert mb-6" data-variant="destructive" role="alert">
+  {{template "iconAlert"}}
+  <strong>Not saved.</strong>
+  <section><p>{{.Message}}</p></section>
+</div>
+{{else}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <section><p>{{.Message}}</p></section>
+</div>
+{{end}}
+{{end}}
+
+<div class="card" data-size="sm">
+  <section>
+    <div class="flex flex-wrap items-center gap-2">
+      <h2 class="m-0 text-base font-semibold wrap-anywhere">{{.Grant.Label}}</h2>
+      {{/* Always, here. A label is client-supplied and repeats, and this is the page where
+           being one grant out costs an edit that appears to do nothing. */}}
+      <span class="grant-id mono">#{{.Grant.ShortID}}</span>
+      {{if .Grant.Expired}}<span class="badge" data-variant="warning">expired</span>{{end}}
+      {{if not .Grant.LastUsed}}<span class="badge" data-variant="outline">never used</span>{{end}}
+    </div>
+    <dl class="facts">
+      <dt>Reaches</dt>
+      <dd>
+        {{range .Grant.Accounts}}<span class="badge" data-variant="secondary">{{.}}</span>{{else}}<span class="text-muted-foreground">no mailboxes</span>{{end}}
+      </dd>
+      <dt>May</dt>
+      <dd>
+        {{range .Grant.Caps}}<span class="badge mono" data-variant="outline">{{.Name}}</span>{{else}}<span class="text-muted-foreground">nothing on its own</span>{{end}}
+      </dd>
+      {{if .Grant.Privileged}}
+      <dt>Privileged</dt>
+      <dd>
+        {{range .Grant.Privileged}}<span class="badge mono" data-variant="warning">{{.Name}}</span>{{end}}
+      </dd>
+      {{end}}
+      <dt>Acts</dt>
+      <dd>
+        <span class="badge mono" data-variant="{{if .Grant.Mode.Enforced}}success{{else}}outline{{end}}">{{.Grant.Mode.Name}}</span>
+        <span class="text-muted-foreground">{{.Grant.Mode.Title}}</span>
+      </dd>
+      <dt>Last used</dt>
+      <dd>
+        {{if .Grant.LastUsed}}<span class="font-medium">{{.Grant.LastUsedAgo}}</span>
+        <span class="text-muted-foreground">&middot; {{.Grant.LastUsed}}</span>
+        {{else}}<span class="text-muted-foreground">never used</span>{{end}}
+      </dd>
+    </dl>
+    <p class="grant-dates">
+      <span>created {{.Grant.CreatedAt.Format "2 Jan 2006"}}</span>
+      {{if .Grant.ExpiresIn}}<span>{{.Grant.ExpiresIn}}</span>{{end}}
+      <span class="mono">{{.Grant.ID}}</span>
+    </p>
+  </section>
+</div>
+
+<p class="prose mt-6">
+  Every row marked <span class="current">in the grant now</span> is something it holds today.
+  Clearing one of those takes it away, which happens the moment you save; ticking a row without
+  the mark hands something over, which is shown to you first.
+</p>
+
+<form method="post" action="/grants/edit">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <input type="hidden" name="id" value="{{.Grant.ID}}">
+
+  <h2>Mailboxes</h2>
+  <fieldset class="fieldset">
+    <legend class="sr-only">Which mailboxes this grant reaches</legend>
+    <div role="group" class="grid gap-3 sm:grid-cols-2">
+      {{range .Accounts}}
+      <div class="field">
+        <label for="acct-{{.ID}}">
+          <input class="input" type="checkbox" id="acct-{{.ID}}" name="accounts" value="{{.ID}}"
+                 {{if .Checked}}checked{{end}}>
+          <span class="min-w-0 flex-1 font-normal">
+            <span class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <strong class="font-medium wrap-anywhere">{{.Alias}}</strong>
+              {{if .Current}}<span class="current">in the grant now</span>{{end}}
+            </span>
+            <span class="mono mt-1 block break-all text-muted-foreground">{{mailAddress .Address}}</span>
+          </span>
+        </label>
+      </div>
+      {{else}}
+      <p class="prose">No mailboxes linked. Link one before this grant can reach anything.</p>
+      {{end}}
+    </div>
+  </fieldset>
+
+  <h2>What it may do</h2>
+  <fieldset class="fieldset">
+    <legend class="sr-only">Which capabilities this grant holds</legend>
+    <div role="group" class="grid gap-3 sm:grid-cols-2">
+      {{range .Caps}}
+      <div class="field">
+        {{/* Privileged capabilities are marked on the label, so ticking one tints the row the
+             colour of the warning beside it rather than the colour of an ordinary
+             confirmation. The word carries the meaning; the tint only finds it. */}}
+        <label for="cap-{{.Name}}" {{if .Privileged}}data-variant="warning"{{end}}>
+          <input class="input" type="checkbox" id="cap-{{.Name}}" name="capabilities" value="{{.Name}}"
+                 {{if .Checked}}checked{{end}}>
+          <span class="min-w-0 flex-1 font-normal">
+            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <strong class="mono font-medium">{{.Name}}</strong>
+              {{if .Privileged}}<span class="badge" data-variant="warning">privileged</span>{{end}}
+              {{if .Current}}<span class="current">in the grant now</span>{{end}}
+            </span>
+            <span class="mt-1 block text-muted-foreground">{{.Description}}</span>
+          </span>
+        </label>
+      </div>
+      {{end}}
+    </div>
+  </fieldset>
+
+  <h2>How much it may do on its own</h2>
+  {{/* A radiogroup, marked like everything else on this page: the row carrying "set to this
+       now" is what the grant does today, and choosing a row above it hands the client more
+       initiative than it has — which is shown to you first, exactly as adding a capability
+       is. Choosing a row below it takes initiative away and applies the moment you save. */}}
+  <fieldset class="fieldset">
+    <legend class="sr-only">How much this client may do on its own</legend>
+    <div role="radiogroup" class="grid gap-3">
+      {{range .Modes}}
+      <div class="field">
+        <label for="mode-{{.Name}}">
+          <input class="input" type="radio" id="mode-{{.Name}}" name="mode" value="{{.Name}}"
+                 {{if .Checked}}checked{{end}}>
+          <span class="min-w-0 flex-1 font-normal">
+            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <strong class="mono font-medium">{{.Name}}</strong>
+              <span class="font-medium">{{.Title}}</span>
+              {{if .Enforced}}<span class="badge" data-variant="success">enforced here</span>
+              {{else}}<span class="badge" data-variant="outline">wording only</span>{{end}}
+              {{if .Current}}<span class="current">set to this now</span>{{end}}
+            </span>
+            <span class="mt-1 block text-muted-foreground">{{.Summary}}</span>
+          </span>
+        </label>
+      </div>
+      {{end}}
+    </div>
+    <p class="prose mt-3">
+      Only <span class="mono">hold</span> is something mailroom enforces. The other two are
+      wording sent to the client, which a well-behaved one follows and nothing makes it follow.
+      Anything already waiting on the Held page stays there whatever you choose here.
+    </p>
+  </fieldset>
+
+  <h2>Expiry</h2>
+  {{/* Written out rather than folded into a select, because the option this control gets
+       misread is the first one: "keep" inside a closed menu looks like a default nobody
+       chose, and the date being kept is not on the page until the menu is opened. */}}
+  <fieldset class="fieldset">
+    <legend class="sr-only">When this grant expires</legend>
+    <div role="radiogroup" class="grid gap-3 sm:grid-cols-2">
+      <div class="field">
+        <label for="exp-keep">
+          <input class="input" type="radio" id="exp-keep" name="expires_days" value="keep"
+                 {{if eq .Expires "keep"}}checked{{end}}>
+          <span class="font-normal">Leave it as it is &mdash; {{.ExpiryNow}}</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="exp-7">
+          <input class="input" type="radio" id="exp-7" name="expires_days" value="7"
+                 {{if eq .Expires "7"}}checked{{end}}>
+          <span class="font-normal">7 days from now</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="exp-30">
+          <input class="input" type="radio" id="exp-30" name="expires_days" value="30"
+                 {{if eq .Expires "30"}}checked{{end}}>
+          <span class="font-normal">30 days from now</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="exp-90">
+          <input class="input" type="radio" id="exp-90" name="expires_days" value="90"
+                 {{if eq .Expires "90"}}checked{{end}}>
+          <span class="font-normal">90 days from now</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="exp-365">
+          <input class="input" type="radio" id="exp-365" name="expires_days" value="365"
+                 {{if eq .Expires "365"}}checked{{end}}>
+          <span class="font-normal">1 year from now</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="exp-never">
+          <input class="input" type="radio" id="exp-never" name="expires_days" value="never"
+                 {{if eq .Expires "never"}}checked{{end}}>
+          <span class="font-normal">Never expires</span>
+        </label>
+      </div>
+    </div>
+    <p class="prose mt-3">
+      Counted from now rather than from when the grant was approved, so picking a shorter one is
+      how you bring an expiry forward.
+    </p>
+  </fieldset>
+
+  <div class="alert mt-8">
+    {{template "iconInfo"}}
+    <strong>What saving does.</strong>
+    <section>
+      <p>
+        Anything taken away applies at once: the token has less than it had, and you can put it
+        back from this page. Anything handed over &mdash; a mailbox, a capability, an expiry
+        pushed out &mdash; is itemised on a page of its own first, because the client&rsquo;s
+        token picks it up on its next call and nobody at that end is asked again.
+      </p>
+    </section>
+  </div>
+
+  <div class="mt-5 flex flex-wrap items-center gap-3">
+    <button class="btn" type="submit">Save changes</button>
+    <a class="btn" data-variant="outline" href="/grants">Cancel</a>
+  </div>
+</form>
+{{end}}

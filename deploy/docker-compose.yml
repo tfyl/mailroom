@@ -1,0 +1,89 @@
+# Minimal mailroom deployment. Put a reverse proxy in front for TLS, and read
+# docs/deploying.md for which paths must bypass any authentication that proxy adds.
+
+services:
+  mailroom:
+    # There is no :latest yet. It is published only by a v* tag, and this project has cut no
+    # release, so the tag 404s and compose fails at pull time. Until a version exists, :main
+    # is what there is — and it moves under you on every merge, which is the wrong property
+    # for a server holding live mailbox credentials. Pin the digest you actually tested:
+    #
+    #     MAILROOM_IMAGE=ghcr.io/tfyl/mailroom@sha256:<digest> docker compose up -d
+    #
+    # `docker image inspect --format '{{index .RepoDigests 0}}' <image>` prints it.
+    image: ${MAILROOM_IMAGE:-ghcr.io/tfyl/mailroom:main}
+    restart: unless-stopped
+    # Loopback, not every interface. The reverse proxy this expects in front of it runs on
+    # the same host and reaches 127.0.0.1 fine; publishing on 0.0.0.0 additionally exposes
+    # the app to anything that can route to the host — which publishing a port does quietly,
+    # and which most host firewalls do not stop, because Docker writes its rules ahead of
+    # theirs.
+    #
+    # It matters most under MAILROOM_AUTH_PROVIDERS=forward, where identity arrives in a
+    # header the proxy sets: anything that can reach this port directly can set that header
+    # itself and be whoever it likes. MAILROOM_TRUSTED_PROXIES narrows which source
+    # addresses the header is honoured from, and is not the whole answer — see
+    # docs/deploying.md#behind-an-authenticating-proxy.
+    #
+    # Widen it deliberately if you mean to: "8080:8080" is the old behaviour, and reaching
+    # the app from another machine without a proxy in front is a decision rather than a
+    # default.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # The container runs as uid 65532 (distroless nonroot). A bind mount keeps the host
+      # directory's ownership, so this path must be chowned to match or SQLite fails with
+      # "unable to open database file", which says nothing about permissions:
+      #
+      #     mkdir -p ./data && sudo chown 65532:65532 ./data
+      #
+      # A named volume avoids the problem entirely — Docker seeds it from the image, which
+      # carries the right ownership — so prefer one unless you want the file on a known path.
+      - ./data:/data
+    environment:
+      # The externally reachable URL. OAuth redirect URIs and the discovery documents are
+      # derived from it, so a mismatch shows up as redirect errors at Google.
+      MAILROOM_PUBLIC_URL: ${MAILROOM_PUBLIC_URL:?set this to your external URL}
+
+      # Seals stored mailbox credentials. Generate with `openssl rand -base64 32` and back it
+      # up somewhere other than this host: without it every mailbox must be re-linked.
+      MAILROOM_ENCRYPTION_KEY: ${MAILROOM_ENCRYPTION_KEY:?generate with openssl rand -base64 32}
+
+      # How operators sign in. There is no built-in password: name an OIDC provider here,
+      # or `forward` if a proxy in front already authenticates. Naming none is a startup
+      # error rather than an open door. See docs/deploying.md#identity.
+      #
+      # `google` needs no issuer and no extra client — it reuses the pair below — but its
+      # login redirect URI <MAILROOM_PUBLIC_URL>/auth/google/callback must be registered at
+      # Google next to the linking one, which is a different path.
+      MAILROOM_AUTH_PROVIDERS: ${MAILROOM_AUTH_PROVIDERS:-google}
+
+      # Any other issuer, one block per name above:
+      #   MAILROOM_OIDC_<NAME>_ISSUER / _CLIENT_ID / _CLIENT_SECRET
+      # Behind an authenticating proxy, `forward` also requires a CIDR list, without which
+      # the identity header would be forgeable by anything that can reach this port.
+      MAILROOM_TRUSTED_PROXIES: ${MAILROOM_TRUSTED_PROXIES:-}
+
+      # Who may create an account here. `closed` is the default and admits nobody new: the
+      # first sign-in claims the instance, and everybody after it is refused. Set `open`
+      # only where the identity provider in front already decides who exists — pointed
+      # at consumer Google it would accept every Google account there is.
+      MAILROOM_SIGNUPS: ${MAILROOM_SIGNUPS:-closed}
+      MAILROOM_ALLOWED_EMAILS: ${MAILROOM_ALLOWED_EMAILS:-}
+      MAILROOM_ALLOWED_DOMAINS: ${MAILROOM_ALLOWED_DOMAINS:-}
+
+      # Attachment bytes are staged on disk instead of being pushed through the MCP
+      # conversation, and handed out as short-lived signed URLs. They default to an
+      # attachments/ directory beside the database — /data/attachments here, so the bind
+      # mount above already covers them — and are deleted when the TTL passes.
+      #
+      # Nothing here is durable and none of it should be: every blob is a copy of mail that
+      # still exists in a mailbox, or a file the client still holds. Fifteen minutes is
+      # deliberately short. See docs/deploying.md#attachments.
+      MAILROOM_ATTACHMENT_TTL: ${MAILROOM_ATTACHMENT_TTL:-15m}
+      MAILROOM_ATTACHMENT_QUOTA: ${MAILROOM_ATTACHMENT_QUOTA:-128MiB}
+      MAILROOM_ATTACHMENT_CACHE_MAX: ${MAILROOM_ATTACHMENT_CACHE_MAX:-512MiB}
+
+      # Your own OAuth client — see deploy/terraform/google/README.md.
+      MAILROOM_GOOGLE_CLIENT_ID: ${MAILROOM_GOOGLE_CLIENT_ID:-}
+      MAILROOM_GOOGLE_CLIENT_SECRET: ${MAILROOM_GOOGLE_CLIENT_SECRET:-}

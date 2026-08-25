@@ -1,0 +1,21 @@
+{{define "mcpEndpoint"}}
+{{/* A value that exists to be copied out, on a page that cannot ship the button that would
+     copy it. So it is a real input — focusable, selectable whole with one keystroke — and the
+     help says which keystroke rather than leaving somebody to drag-select a URL. */}}
+<div class="card endpoint mb-8" data-size="sm">
+  <section>
+    <div class="field">
+      <label for="mcp-endpoint">MCP endpoint</label>
+      <input type="text" id="mcp-endpoint" value="{{.MCPURL}}" readonly aria-readonly="true"
+             spellcheck="false" autocomplete="off" aria-describedby="mcp-endpoint-help">
+      <p id="mcp-endpoint-help">
+        The address to paste into an MCP client. Click the field, then
+        <kbd class="kbd">Ctrl</kbd>/<kbd class="kbd">&#8984;</kbd> <kbd class="kbd">A</kbd> and
+        <kbd class="kbd">Ctrl</kbd>/<kbd class="kbd">&#8984;</kbd> <kbd class="kbd">C</kbd> to
+        take the whole of it. Connecting sends you to a consent screen first, so nothing is
+        reachable until you approve it there.
+      </p>
+    </div>
+  </section>
+</div>
+{{end}}

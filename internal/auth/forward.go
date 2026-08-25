@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 )
@@ -16,7 +15,7 @@ import (
 // as well: the CIDR check is a second line of defence, not the only one.
 type Forward struct {
 	header  string
-	trusted []*net.IPNet
+	trusted TrustedProxies
 	group   string
 }
 
@@ -24,38 +23,24 @@ func NewForward(header string, trustedProxies []string, requiredGroup string) (*
 	if header == "" {
 		return nil, fmt.Errorf("forward-auth requires a header name")
 	}
-	if len(trustedProxies) == 0 {
+	trusted, err := ParseTrustedProxies(trustedProxies)
+	if err != nil {
+		return nil, err
+	}
+	// An empty list would mean accepting the identity header from any source, so this mode
+	// refuses to exist without one. Elsewhere an empty list is merely restrictive; here it
+	// is the whole control.
+	if trusted.Empty() {
 		return nil, fmt.Errorf("forward-auth requires at least one trusted proxy: without one " +
 			"the identity header would be accepted from any source")
 	}
-
-	var nets []*net.IPNet
-	for _, entry := range trustedProxies {
-		entry = strings.TrimSpace(entry)
-		if !strings.Contains(entry, "/") {
-			// A bare address is a /32 or /128.
-			if ip := net.ParseIP(entry); ip != nil {
-				bits := 32
-				if ip.To4() == nil {
-					bits = 128
-				}
-				nets = append(nets, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
-				continue
-			}
-		}
-		_, n, err := net.ParseCIDR(entry)
-		if err != nil {
-			return nil, fmt.Errorf("trusted proxy %q is not an IP or CIDR: %w", entry, err)
-		}
-		nets = append(nets, n)
-	}
-	return &Forward{header: header, trusted: nets, group: requiredGroup}, nil
+	return &Forward{header: header, trusted: trusted, group: requiredGroup}, nil
 }
 
 func (f *Forward) Mode() string { return "forward" }
 
 func (f *Forward) Identify(r *http.Request) (Operator, error) {
-	if !f.trustedSource(r) {
+	if !f.trusted.TrustsRequest(r) {
 		// Deliberately reported as "no session" rather than "your address is not trusted":
 		// an untrusted caller should not learn that a header-based bypass exists at all.
 		return Operator{}, ErrNoSession
@@ -91,23 +76,6 @@ func (f *Forward) StartLogin(http.ResponseWriter, *http.Request) bool { return f
 
 // Logout is a no-op; the session belongs to the proxy.
 func (f *Forward) Logout(http.ResponseWriter, *http.Request) {}
-
-func (f *Forward) trustedSource(r *http.Request) bool {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	for _, n := range f.trusted {
-		if n.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
 
 func splitAndTrim(s string) []string {
 	var out []string

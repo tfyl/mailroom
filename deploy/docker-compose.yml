@@ -60,8 +60,13 @@ services:
 
       # Any other issuer, one block per name above:
       #   MAILROOM_OIDC_<NAME>_ISSUER / _CLIENT_ID / _CLIENT_SECRET
-      # Behind an authenticating proxy, `forward` also requires a CIDR list, without which
-      # the identity header would be forgeable by anything that can reach this port.
+      #
+      # The CIDR list below is which source addresses may speak for somebody else. `forward`
+      # requires it, because without it the identity header would be forgeable by anything
+      # that can reach this port — but it is worth setting whatever the login method is. The
+      # bound on unauthenticated client registration attributes a caller by the same list,
+      # and with nothing on it every request behind a proxy is attributed to the proxy.
+      # See docs/deploying.md#bounding-client-registration.
       MAILROOM_TRUSTED_PROXIES: ${MAILROOM_TRUSTED_PROXIES:-}
 
       # Who may create an account here. `closed` is the default and admits nobody new: the

@@ -37,6 +37,46 @@ jobs:
       - name: Build
         run: CGO_ENABLED=0 go build ./...
 
+  # The `test` job above compiles with whatever Go `setup-go` installs, which is not what
+  # produces the published binary — the Dockerfile's base image is. Until this job existed
+  # nothing on a pull request built the image at all, so a Dockerfile change was checked only
+  # by release.yml, which runs *after* the merge, on main, in the workflow that publishes what
+  # production pulls. The golang 1.26-alpine to 1.27-alpine bump (#2) arrived with five green
+  # checks behind it and not one of them had compiled a line of Go with the image it changed.
+  #
+  # This is release.yml's build, moved in front of the merge, and only the build. It does not
+  # push: a pull request from a fork has no registry credentials and must not be handed any, so
+  # there is no login step here and nothing in this job needs more than the workflow's
+  # contents: read. With neither push nor load, buildx runs every stage and exports nothing,
+  # which is the whole of what a Dockerfile change needs proving about it.
+  #
+  # Both architectures, because building one proves one. The second is a cross-compile rather
+  # than an emulated build (the Dockerfile says why), so it costs another `go build` and not
+  # the quarter of an hour emulation used to.
+  #
+  # The cache is read-only on purpose. cache-from picks up what release.yml's cache-to wrote
+  # from main — the module download and the source copy, which is the slow part — while
+  # writing nothing back, so pull-request builds stay off the repository's ten-gigabyte cache
+  # budget instead of evicting from it the entry they just read.
+  #
+  # The smoke test stays in release.yml. It needs a pushed image, and what it checks is that a
+  # published artifact starts; there is nothing to publish here.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          # Same argument release.yml passes, so the ldflags that stamp internal/mcp.Version
+          # are exercised rather than left on the Dockerfile's `dev` default.
+          build-args: |
+            VERSION=ci-${{ github.sha }}
+          cache-from: type=gha
+
   # internal/web/static/app.css is generated from internal/web/assets and committed, because
   # go:embed needs it to exist at compile time and `git clone && go build` has to work for
   # somebody with no CSS toolchain. A committed artefact can go stale, and a stale one is

@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tfyl/mailroom/internal/auth"
 	"github.com/tfyl/mailroom/internal/grant"
 	"github.com/tfyl/mailroom/internal/ids"
 	"github.com/tfyl/mailroom/internal/mail"
@@ -35,6 +36,10 @@ type Server struct {
 	codes    *codeStore
 	tokenTTL time.Duration
 	now      func() time.Time
+
+	// registrations bounds POST /register. Nil is an unbounded endpoint, which is what this
+	// server was before there was anything here.
+	registrations *registrationLimit
 
 	// ConsentPage renders the approval form. Supplied by the web layer so this package owns
 	// protocol rather than presentation.
@@ -187,6 +192,21 @@ func New(st *store.Store, publicURL string) *Server {
 	}
 }
 
+// WithRegistrationLimit bounds how much unauthenticated client registration this server
+// accepts, per client address and across the instance.
+//
+// The addresses come from the same trust boundary forward-auth reads an identity header
+// from, and for the same reason: a header naming somebody else is worth exactly as much as
+// the source that sent it. A count of zero leaves that half unenforced.
+func (s *Server) WithRegistrationLimit(proxies auth.TrustedProxies, perAddress int, perAddressWindow time.Duration, instance int, instanceWindow time.Duration) *Server {
+	s.registrations = newRegistrationLimit(
+		rate{count: perAddress, window: perAddressWindow},
+		rate{count: instance, window: instanceWindow},
+		proxies,
+	)
+	return s
+}
+
 // Routes registers the endpoints that must be reachable without an interactive login. A
 // remote MCP client has no browser attached, so anything a proxy protects with an
 // interactive challenge is unreachable to it — see docs/deploying.md.
@@ -224,6 +244,13 @@ func (s *Server) resourceMetadata(w http.ResponseWriter, _ *http.Request) {
 // grants nothing at all. Every capability still comes from a consent screen the operator
 // approves.
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
+	// Before the body is read, because the cheapest request to refuse is the one nothing has
+	// been spent on yet.
+	if !s.registrations.allow(r) {
+		refuseRegistration(w)
+		return
+	}
+
 	var req struct {
 		ClientName   string   `json:"client_name"`
 		RedirectURIs []string `json:"redirect_uris"`
@@ -258,6 +285,26 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		"redirect_uris":              c.RedirectURIs,
 		"token_endpoint_auth_method": "none",
 	})
+}
+
+// refuseRegistration is the only thing a bounded registration endpoint ever says.
+//
+// One refusal for both counters, worded so that it names neither. Telling a caller whether it
+// personally is over its allowance or whether the instance is full would tell it which one to
+// work around — spread across more addresses, or keep going because the ceiling is shared and
+// somebody else is paying for it. It is the same reason an unknown invite, a spent one, a
+// revoked one and an expired one are one indistinguishable refusal.
+//
+// No Retry-After, for the same reason: the two counters have different windows, and a header
+// that differed between them would restore by arithmetic exactly the distinction the body is
+// careful not to draw.
+//
+// `temporarily_unavailable` because it is true and because it is the OAuth code that says so.
+// This is a condition that clears on its own, and a client reading the error rather than the
+// status should be told to come back rather than to change what it sent.
+func refuseRegistration(w http.ResponseWriter) {
+	writeError(w, http.StatusTooManyRequests, "temporarily_unavailable",
+		"registration is temporarily unavailable; try again later")
 }
 
 // Authorize handles GET /authorize. It runs behind operator authentication: the consent
@@ -614,6 +661,15 @@ func (s *Server) Deny(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
+	// The other unauthenticated endpoint, and the other thing a stranger can post at. It is
+	// deliberately not rate limited: it writes no row, and it reads no database until a code
+	// has already validated against an in-process map, so a bogus exchange costs a lookup.
+	// Its codes are 32 bytes from crypto/rand, so there is no guessing loop here to slow
+	// down — a limit would only add a way to refuse a legitimate exchange during a flood.
+	// What it did lack is the bound /register has always had: ParseForm was falling back to
+	// net/http's 10MB default, which is 10MB of an unauthenticated stranger's choosing held
+	// in memory for a form that is never more than a few hundred bytes.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
 	if err := r.ParseForm(); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "could not read form")
 		return

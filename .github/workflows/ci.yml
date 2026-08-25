@@ -167,7 +167,7 @@ jobs:
       # .github/ it was read by the full-history step below and not by this one, so an
       # excused finding still failed the build whenever it fell inside a pull request's own
       # commit range — which is the only range this step ever looks at.
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Off so the grant above can stay read-only. Left on, the action posts a comment

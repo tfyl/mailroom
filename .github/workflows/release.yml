@@ -41,9 +41,9 @@ jobs:
       # Leaving the emulator uninstalled is also what keeps it that way. A RUN added to the
       # runtime stage, or a build stage that loses its --platform pin, fails here loudly
       # instead of quietly costing a quarter of an hour per release.
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

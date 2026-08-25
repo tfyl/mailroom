@@ -1,0 +1,27 @@
+name: Something is missing
+description: A capability, a provider, or a change to how something works.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [docs/roadmap.md](https://github.com/tfyl/mailroom/blob/main/docs/roadmap.md) may
+        already cover it, and [docs/providers.md](https://github.com/tfyl/mailroom/blob/main/docs/providers.md)
+        records what each provider can and cannot do. Neither is a reason not to file — say so
+        if you disagree with what they say.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do
+      description: The task, rather than the feature. The shape of the answer often changes once the task is on the page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What do you do instead today
+      description: Including "nothing, I gave up", which is useful information.
+    validations:
+      required: false

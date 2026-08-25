@@ -1,0 +1,430 @@
+{{define "content"}}
+<h1>Mailboxes</h1>
+<p class="lede">
+  Mailboxes you have linked. Grants are issued against these, and only you can see or reach
+  them &mdash; other people signed in to this instance have their own.
+</p>
+
+{{if .FirstRun}}
+<div class="alert mb-4">
+  {{template "iconInfo"}}
+  <strong>You are signed in as {{.User.Display}}.</strong>
+  <section>
+    <p>
+      Signing in did not ask for access to any mail, and it deliberately does not have any
+      yet. Linking a mailbox below is a separate step, with its own consent screen, so the
+      account you log in with and the mail you grant access to stay independent.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{if .Linked}}
+<div class="alert mb-4">
+  {{template "iconInfo"}}
+  <strong>Linked {{.Linked}}.</strong>
+  {{if .NoSending}}
+  <section>
+    <p>
+      It cannot send: no SMTP server was given. The consent screen still offers
+      <span class="mono">send</span> &mdash; it lists every capability rather than what each
+      mailbox implements &mdash; and a send against this one is refused as unsupported when a
+      client attempts it.
+    </p>
+  </section>
+  {{end}}
+</div>
+{{end}}
+
+{{if .Renamed}}
+<div class="alert mb-4">
+  {{template "iconInfo"}}
+  <strong>Renamed to {{.Renamed}}.</strong>
+  <section>
+    <p>
+      Grants are unaffected &mdash; they name mailboxes by id, not by alias. The old name is
+      now free for another mailbox to take, so update anything that still refers to it.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{/* A rejected rename is drawn inside the row it belongs to, with the name just typed still
+     in the field. This is the fallback for the one case that cannot be: an error naming a
+     mailbox that is not in the list. */}}
+{{if and .RenameError (not .RenameAt)}}
+<div class="alert mb-4" data-variant="destructive" role="alert">
+  {{template "iconAlert"}}
+  <strong>Not renamed.</strong>
+  <section><p>{{.RenameError}}</p></section>
+</div>
+{{end}}
+
+<h2>Linked</h2>
+{{if .Accounts}}
+<ul class="stack">
+  {{range .Accounts}}
+  <li class="mailbox">
+    <div class="mailbox-head">
+      <div class="min-w-0">
+        <div class="mono font-medium break-all">{{mailAddress .Address}}</div>
+        <p class="mailbox-meta">
+          <span class="min-w-0">alias <strong class="font-medium text-foreground wrap-anywhere">{{.Alias}}</strong></span>
+          <span>{{.Provider}}</span>
+          {{if .LastUsedAt.IsZero}}
+            <span>never used</span>
+          {{else}}
+            <span>used {{.LastUsedAt.Format "2 Jan 15:04"}}</span>
+          {{end}}
+        </p>
+      </div>
+      {{if eq (printf "%s" .Status) "linked"}}
+        <span class="badge" data-variant="success">linked</span>
+      {{else if eq (printf "%s" .Status) "needs_reauth"}}
+        <span class="badge" data-variant="warning">re-auth needed</span>
+      {{else}}
+        <span class="badge" data-variant="outline">{{.Status}}</span>
+      {{end}}
+    </div>
+
+    {{/* Renaming used to sit in the row as a permanently open input, one tab stop from the
+         button that destroys the credential. Both acts are rare, so both are behind one
+         disclosure — and it opens on its own when a rename has just been rejected, so the
+         correction is never hidden behind a closed summary. */}}
+    <details class="advanced mailbox-manage"{{if eq $.RenameAt .ID}} open{{end}}>
+      <summary>Rename or unlink {{.Alias}}</summary>
+      <div class="manage">
+        <form method="post" action="/accounts/rename" class="grid gap-4">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <div class="field"{{if eq $.RenameAt .ID}} data-invalid="true"{{end}}>
+            <label for="alias-{{.ID}}">Alias</label>
+            <input class="input max-w-64" type="text" id="alias-{{.ID}}" name="alias" required
+                   pattern="[a-zA-Z0-9_-]+" maxlength="64"
+                   spellcheck="false" autocapitalize="none" autocomplete="off"
+                   {{if eq $.RenameAt .ID}}aria-invalid="true" value="{{$.RenameAlias}}"{{else}}value="{{.Alias}}"{{end}}>
+            {{if eq $.RenameAt .ID}}<p role="alert">{{$.RenameError}}</p>{{end}}
+            <p>
+              Letters, numbers, dashes and underscores. Grants store mailbox ids rather than
+              names, so access is untouched and the audit log retitles itself. The old name is
+              released for another mailbox to take, though &mdash; so anything still using it,
+              an agent&rsquo;s standing instructions most of all, should be pointed at the new
+              one.
+            </p>
+          </div>
+          <button class="btn w-fit" data-variant="outline">Rename</button>
+        </form>
+
+        {{/* Unlinking stays immediate and unconfirmed by a page of its own, deliberately: a
+             mailbox is relinked by the person looking at this screen, which is why revoking
+             asks and this does not. The tick is what keeps it from being reached by accident,
+             which is what a bare button beside Rename could not do. */}}
+        <div class="danger">
+          <h3>Unlink</h3>
+          <p class="prose">
+            The stored credential is destroyed and every grant naming this mailbox loses access
+            to it, immediately. Nothing happens to the mail itself, and the mailbox can be
+            linked again &mdash; under a new alias, since
+            <strong class="font-medium text-foreground wrap-anywhere">{{.Alias}}</strong> stays reserved, and
+            the grants that named it stay without it.
+          </p>
+          <form method="post" action="/accounts/unlink" class="grid gap-3">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <div class="field">
+              <label for="unlink-{{.ID}}" data-variant="destructive">
+                <input class="input" type="checkbox" id="unlink-{{.ID}}" name="understood"
+                       value="1" required>
+                <span class="font-normal wrap-anywhere">
+                  Unlink {{mailAddress .Address}} and drop the grants that name it.
+                </span>
+              </label>
+            </div>
+            <button class="btn w-fit" data-variant="destructive">Unlink</button>
+          </form>
+        </div>
+      </div>
+    </details>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="card">
+  <section class="empty py-6 text-sm text-muted-foreground">
+    No mailboxes linked yet. Pick a provider below to link the first one.
+  </section>
+</div>
+{{end}}
+
+<h2>Link a mailbox</h2>
+<p class="prose mb-4">
+  Pick where the mailbox lives; one provider opens at a time. Each asks for an alias, which is
+  the name grants and tools refer to the mailbox by. Aliases are never reused, even after
+  unlinking, so an old grant can never end up pointing at a different mailbox.
+</p>
+
+<div class="stack chooser">
+  <details name="provider"{{if eq .LinkOpen "google"}} open{{end}}>
+    <summary>
+      <span class="choice">
+        <span class="choice-name">Gmail</span>
+        <span class="choice-note">A Google account, over OAuth</span>
+      </span>
+      {{if not .GoogleReady}}<span class="badge" data-variant="outline">not configured</span>{{end}}
+    </summary>
+    <div class="choice-body">
+      {{if not .GoogleReady}}
+      <div class="alert mb-4">
+        {{template "iconInfo"}}
+        <section>
+          <p>
+            Google linking is not configured, so Gmail cannot be attached by OAuth here. Set
+            <span class="mono">MAILROOM_GOOGLE_CLIENT_ID</span> and
+            <span class="mono">MAILROOM_GOOGLE_CLIENT_SECRET</span> from your own Google Cloud
+            project, then restart &mdash; or link the same mailbox over IMAP with an app
+            password, which needs no OAuth client at all. See
+            <span class="mono">docs/deploying.md</span>.
+          </p>
+        </section>
+      </div>
+      {{end}}
+      <form method="post" action="/accounts/link/google" class="link-form">
+        <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+        <div class="field">
+          <label for="google-alias">Alias</label>
+          <input type="text" id="google-alias" name="alias" placeholder="work" required
+                 pattern="[a-zA-Z0-9_-]+" title="Letters, numbers, dashes and underscores"
+                 spellcheck="false" autocapitalize="none" autocomplete="off">
+        </div>
+        <button class="btn" {{if not .GoogleReady}}disabled{{end}}>Link Gmail</button>
+      </form>
+    </div>
+  </details>
+
+  <details name="provider"{{if eq .LinkOpen "microsoft"}} open{{end}}>
+    <summary>
+      <span class="choice">
+        <span class="choice-name">Microsoft 365 or Outlook.com</span>
+        <span class="choice-note">A work, school or personal Microsoft account, over OAuth</span>
+      </span>
+      {{if not .MicrosoftReady}}<span class="badge" data-variant="outline">not configured</span>{{end}}
+    </summary>
+    <div class="choice-body">
+      {{if .MicrosoftReady}}
+      <p class="prose mb-4">
+        One button for both kinds of account: a personal outlook.com, hotmail.com or live.com
+        mailbox and a work or school Microsoft 365 one both consent at the same place. Offline
+        access is among the permissions asked for, which is what returns a refresh token rather
+        than an hour or so of access, and the consent screen is shown every time so that what
+        is being granted is what you just read.
+      </p>
+      {{else}}
+      <div class="alert mb-4">
+        {{template "iconInfo"}}
+        <section>
+          <p>
+            Microsoft linking is not configured, so a Microsoft 365 or Outlook.com mailbox
+            cannot be attached here. Set <span class="mono">MAILROOM_MICROSOFT_CLIENT_ID</span>
+            and <span class="mono">MAILROOM_MICROSOFT_CLIENT_SECRET</span> from your own Azure
+            app registration, then restart. See <span class="mono">docs/deploying.md</span>.
+          </p>
+        </section>
+      </div>
+      {{end}}
+      <form method="post" action="/accounts/link/microsoft" class="link-form">
+        <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+        <div class="field">
+          <label for="microsoft-alias">Alias</label>
+          <input type="text" id="microsoft-alias" name="alias" placeholder="outlook" required
+                 pattern="[a-zA-Z0-9_-]+" title="Letters, numbers, dashes and underscores"
+                 spellcheck="false" autocapitalize="none" autocomplete="off">
+        </div>
+        <button class="btn" {{if not .MicrosoftReady}}disabled{{end}}>Link Microsoft mailbox</button>
+      </form>
+      <p class="prose mt-4">
+        Microsoft mailboxes read, search, thread, draft, send, label, file, filter and delete
+        through Microsoft Graph. Two things a personal Microsoft account does not have at all
+        are message rules and the automatic-replies setting: those report
+        <span class="mono">unsupported_by_provider</span> on such a mailbox and work on a work
+        or school one. This provider has never been run against a live Microsoft account
+        &mdash; see <span class="mono">docs/providers.md</span>.
+      </p>
+    </div>
+  </details>
+
+  <details name="provider"{{if eq .LinkOpen "zoho"}} open{{end}}>
+    <summary>
+      <span class="choice">
+        <span class="choice-name">Zoho Mail</span>
+        <span class="choice-note">A Zoho account, over OAuth, in its own data centre</span>
+      </span>
+      {{if not .ZohoReady}}<span class="badge" data-variant="outline">not configured</span>{{end}}
+    </summary>
+    <div class="choice-body">
+      {{if .ZohoReady}}
+      <p class="prose mb-4">
+        Consent is granted at your account&rsquo;s own Zoho data centre, and the mailbox is only
+        reachable through that same one &mdash; a mailbox in another region cannot be linked
+        here whatever the credentials say. Zoho is asked for offline access with the consent
+        screen forced, which is the only combination that returns a refresh token.
+      </p>
+      {{else}}
+      <div class="alert mb-4">
+        {{template "iconInfo"}}
+        <section>
+          <p>
+            Zoho linking is not configured, so a Zoho mailbox cannot be attached here. Set
+            <span class="mono">MAILROOM_ZOHO_CLIENT_ID</span> and
+            <span class="mono">MAILROOM_ZOHO_CLIENT_SECRET</span> from your own Zoho API
+            console, along with <span class="mono">MAILROOM_ZOHO_REGION</span> if your account
+            is not in the <span class="mono">com</span> data centre, then restart. See
+            <span class="mono">docs/deploying.md</span>.
+          </p>
+        </section>
+      </div>
+      {{end}}
+      <form method="post" action="/accounts/link/zoho" class="link-form">
+        <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+        <div class="field">
+          <label for="zoho-alias">Alias</label>
+          <input type="text" id="zoho-alias" name="alias" placeholder="zoho" required
+                 pattern="[a-zA-Z0-9_-]+" title="Letters, numbers, dashes and underscores"
+                 spellcheck="false" autocapitalize="none" autocomplete="off">
+        </div>
+        <button class="btn" {{if not .ZohoReady}}disabled{{end}}>Link Zoho mailbox</button>
+      </form>
+      <p class="prose mt-4">
+        Zoho mailboxes read, send and label. They have no drafts, no filters, no settings and
+        no delete: those tools report <span class="mono">unsupported_by_provider</span> rather
+        than failing at the grant. This provider has never been run against a live Zoho account
+        &mdash; see <span class="mono">docs/providers.md</span>.
+      </p>
+    </div>
+  </details>
+
+  <details name="provider"{{if eq .LinkOpen "imap"}} open{{end}}>
+    <summary>
+      <span class="choice">
+        <span class="choice-name">Any IMAP server</span>
+        <span class="choice-note">A password or app password, with no OAuth client to register</span>
+      </span>
+    </summary>
+    <div class="choice-body">
+      <p class="prose mb-4">
+        Any IMAP server, including Gmail with an app password &mdash; which is the only way to
+        attach a Gmail mailbox with no OAuth client and no Google Cloud Console. An app password
+        needs 2-Step Verification switched on, and is not your account password.
+      </p>
+
+      {{/* Everything the server itself rejected lands on the field it came from. This is what
+           is left: the failures that belong to the form as a whole. */}}
+      {{if and .IMAPError (not .IMAPErrorField)}}
+      <div class="alert mb-4" data-variant="destructive" role="alert">
+        {{template "iconAlert"}}
+        <strong>Not linked.</strong>
+        <section><p>{{.IMAPError}}</p></section>
+      </div>
+      {{end}}
+
+      <form method="post" action="/accounts/link/imap" class="grid max-w-2xl gap-5">
+        <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+        <div class="field"{{if eq .IMAPErrorField "alias"}} data-invalid="true"{{end}}>
+          <label for="imap-alias">Alias</label>
+          <input type="text" id="imap-alias" name="alias" placeholder="personal" required
+                 pattern="[a-zA-Z0-9_-]+" title="Letters, numbers, dashes and underscores"
+                 spellcheck="false" autocapitalize="none" autocomplete="off"
+                 {{if eq .IMAPErrorField "alias"}}aria-invalid="true"{{end}}
+                 value="{{.IMAP.Alias}}">
+          {{if eq .IMAPErrorField "alias"}}<p role="alert">{{.IMAPError}}</p>{{end}}
+          <p>How tools and grants will refer to this mailbox. Letters, numbers, dashes and
+            underscores.</p>
+        </div>
+        <div class="field"{{if eq .IMAPErrorField "address"}} data-invalid="true"{{end}}>
+          <label for="imap-address">Email address</label>
+          <input type="email" id="imap-address" name="address" required
+                 spellcheck="false" autocapitalize="none" autocomplete="email"
+                 {{if eq .IMAPErrorField "address"}}aria-invalid="true"{{end}}
+                 placeholder="you@example.com" value="{{.IMAP.Address}}">
+          {{if eq .IMAPErrorField "address"}}<p role="alert">{{.IMAPError}}</p>{{end}}
+        </div>
+        <div class="field"{{if eq .IMAPErrorField "host"}} data-invalid="true"{{end}}>
+          <label for="imap-host">IMAP server</label>
+          <input type="text" id="imap-host" name="host" required
+                 spellcheck="false" autocapitalize="none" autocomplete="off"
+                 {{if eq .IMAPErrorField "host"}}aria-invalid="true"{{end}}
+                 placeholder="imap.gmail.com:993" value="{{.IMAP.Host}}">
+          {{if eq .IMAPErrorField "host"}}<p role="alert">{{.IMAPError}}</p>{{end}}
+          <p>Host and port together, as <span class="mono">host:port</span>.</p>
+        </div>
+        <div class="field"{{if eq .IMAPErrorField "password"}} data-invalid="true"{{end}}>
+          <label for="imap-password">Password</label>
+          <input type="password" id="imap-password" name="password" required
+                 autocomplete="off"
+                 {{if eq .IMAPErrorField "password"}}aria-invalid="true"{{end}}
+                 placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+          {{if eq .IMAPErrorField "password"}}<p role="alert">{{.IMAPError}}</p>{{end}}
+          <p>For Gmail and most providers this is an app password rather than your account
+            password &mdash; 16 characters, and spaces in it are ignored.</p>
+        </div>
+
+        {{/* Four fields most mailboxes do not need, kept out of the way rather than off the
+             page. A <details> is the disclosure this UI can have: no script, and it opens on
+             its own when something inside it is already set or has just been rejected, so a
+             correction is never hidden behind a closed summary. */}}
+        <details class="advanced"{{if or .IMAP.Username .IMAP.SMTPHost .IMAP.SMTPFrom (not .IMAP.TLS) .IMAPError}} open{{end}}>
+          <summary>Sending, sign-in name and TLS</summary>
+          <div class="grid gap-5">
+            <div class="field">
+              <label for="imap-smtp">SMTP server <span class="optional">optional</span></label>
+              <input type="text" id="imap-smtp" name="smtp_host"
+                     spellcheck="false" autocapitalize="none" autocomplete="off"
+                     placeholder="smtp.gmail.com:587" value="{{.IMAP.SMTPHost}}">
+              <p>Leave this empty and the mailbox reads only. <span class="mono">send</span> then
+                fails at first use rather than at the grant, because the consent screen offers
+                whatever the mailbox can do.</p>
+            </div>
+            <div class="field">
+              <label for="imap-username">Sign-in name <span class="optional">optional</span></label>
+              <input type="text" id="imap-username" name="username"
+                     spellcheck="false" autocapitalize="none" autocomplete="username"
+                     placeholder="defaults to the address above" value="{{.IMAP.Username}}">
+              <p>Only needed where the server wants something other than the address.</p>
+            </div>
+            <div class="field">
+              <label for="imap-smtp-from">Envelope sender <span class="optional">optional</span></label>
+              <input type="email" id="imap-smtp-from" name="smtp_from"
+                     spellcheck="false" autocapitalize="none" autocomplete="off"
+                     placeholder="defaults to the address above" value="{{.IMAP.SMTPFrom}}">
+              <p>Only needed where the server insists on sending as a different address.</p>
+            </div>
+            <div class="field">
+              <label for="imap-insecure" data-variant="destructive">
+                <input class="input" type="checkbox" id="imap-insecure" name="insecure" value="1"
+                       {{if not .IMAP.TLS}}checked{{end}}>
+                <span class="font-normal">
+                  Connect without TLS. Only sensible against a server on this machine &mdash;
+                  anywhere else the password crosses the network in the clear.
+                </span>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <p class="prose">
+          The credentials are checked against the server before anything is stored, so a typo
+          comes back here rather than becoming a mailbox that looks linked and fails on first use.
+        </p>
+        <button class="btn w-fit" type="submit">Link IMAP mailbox</button>
+      </form>
+      <p class="prose mt-5">
+        Filters and settings do not exist on IMAP, whatever the server:
+        <span class="mono">mail_filters</span> and <span class="mono">mail_settings</span> have
+        nothing to talk to on such a mailbox. See <span class="mono">docs/deploying.md</span>.
+      </p>
+    </div>
+  </details>
+</div>
+
+<h2>Connect a client</h2>
+{{template "mcpEndpoint" .}}
+{{end}}

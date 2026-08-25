@@ -1,0 +1,36 @@
+/* Basecoat vega — Alert. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .alert {
+    @apply grid gap-0.5 rounded-lg border px-4 py-3 text-start text-sm has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2.5 [&>svg]:row-span-2 [&>svg]:translate-y-0.5 [&>svg]:text-current [&>svg:not([class*='size-'])]:size-4;
+  }
+
+  .alert {
+    @apply bg-card text-card-foreground;
+  }
+
+  .alert[data-variant='destructive'] {
+    @apply text-destructive bg-card [&>svg]:text-current;
+  }
+
+  .alert > :is(h2, h3, h4, h5, h6, strong, [data-title]),
+  .alert[data-variant='destructive'] > :is(h2, h3, h4, h5, h6, strong, [data-title]) {
+    @apply font-medium;
+  }
+
+
+  .alert:has(> svg) > :is(h2, h3, h4, h5, h6, strong, [data-title]) {
+    @apply col-start-2;
+  }
+  .alert > section {
+    @apply text-muted-foreground text-sm text-balance md:text-pretty [&_p:not(:last-child)]:mb-4;
+  }
+
+  .alert[data-variant='destructive'] > section {
+    @apply text-destructive/90 text-sm text-balance md:text-pretty [&_p:not(:last-child)]:mb-4;
+  }
+
+  .alert > footer,
+  .alert[data-variant='destructive'] > footer {
+    @apply top-2.5 end-3;
+  }
+}

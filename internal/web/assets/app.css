@@ -1,0 +1,57 @@
+/* Source for internal/web/static/app.css, which is the file the binary embeds and serves.
+   Build it with `make css`. The built artefact is committed, so nothing here is on the path
+   of `go build`; docs/ui.md explains the whole arrangement.
+
+   Nothing this stylesheet describes may depend on JavaScript. The policy is default-src
+   'none' with no script-src, and internal/web/confirm_test.go fails the build on a <script>
+   tag or an on* attribute in any template. That is why the component list below is an
+   allowlist rather than Basecoat's own barrel file, and why scripts/vendor-basecoat.sh does
+   not even fetch the rest: a component whose behaviour lives in basecoat.js is not here to
+   be reached for. */
+@import "tailwindcss" source(none);
+
+/* The only markup there is. Stated rather than left to Tailwind's automatic detection, which
+   would walk out of this package and scan the Go source and the docs along with it. */
+@source "../templates/*.html";
+
+@import "./theme.css";
+
+/* Basecoat, vendored under ./basecoat — see its VERSION and LICENSE.md. Each component is
+   two files: components/ lays it out, styles/vega/ colours, sizes and rounds it. vega is
+   Basecoat's rendering of shadcn/ui's own default look, which is the look being reached for
+   here. A few components are structure only and so have no vega half. */
+@import "./basecoat/components/alert.css";
+@import "./basecoat/components/badge.css";
+@import "./basecoat/components/button.css";
+@import "./basecoat/components/button-group.css";
+@import "./basecoat/components/card.css";
+@import "./basecoat/components/checkbox.css";
+@import "./basecoat/components/empty.css";
+@import "./basecoat/components/field.css";
+@import "./basecoat/components/input.css";
+@import "./basecoat/components/item.css";
+@import "./basecoat/components/kbd.css";
+@import "./basecoat/components/label.css";
+@import "./basecoat/components/native-select.css";
+@import "./basecoat/components/radio.css";
+@import "./basecoat/components/table.css";
+@import "./basecoat/components/textarea.css";
+
+@import "./basecoat/styles/vega/alert.css";
+@import "./basecoat/styles/vega/badge.css";
+@import "./basecoat/styles/vega/button.css";
+@import "./basecoat/styles/vega/button-group.css";
+@import "./basecoat/styles/vega/card.css";
+@import "./basecoat/styles/vega/checkbox.css";
+@import "./basecoat/styles/vega/empty.css";
+@import "./basecoat/styles/vega/field.css";
+@import "./basecoat/styles/vega/input.css";
+@import "./basecoat/styles/vega/item.css";
+@import "./basecoat/styles/vega/kbd.css";
+@import "./basecoat/styles/vega/label.css";
+@import "./basecoat/styles/vega/native-select.css";
+@import "./basecoat/styles/vega/radio.css";
+@import "./basecoat/styles/vega/table.css";
+@import "./basecoat/styles/vega/textarea.css";
+
+@import "./mailroom.css";

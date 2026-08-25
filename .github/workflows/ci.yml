@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build
+        run: CGO_ENABLED=0 go build ./...
+
+  # internal/web/static/app.css is generated from internal/web/assets and committed, because
+  # go:embed needs it to exist at compile time and `git clone && go build` has to work for
+  # somebody with no CSS toolchain. A committed artefact can go stale, and a stale one is
+  # invisible: the page renders, with the styling of whatever the sources used to say. So it
+  # is rebuilt here and compared.
+  #
+  # Tailwind's standalone binary carries its own runtime, which is why this needs no Node,
+  # no package.json and no lockfile.
+  stylesheet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Rebuild the stylesheet and compare
+        run: make css-check
+
+  # internal/notices/NOTICES.md carries the copyright and permission notices of every Go
+  # module compiled into the binary, because MIT, BSD and Apache-2.0 all ask for them to
+  # accompany a copy and a published image is a copy with none of them in it.
+  #
+  # Generated and committed like the stylesheet above, and stale under the same conditions —
+  # except that here staleness has a legal consequence rather than a visual one, and even less
+  # to show for itself. A dependency added or bumped changes what is being redistributed while
+  # the file goes on describing the previous set, and nothing else in the build notices. So it
+  # is regenerated here and compared.
+  #
+  # The generator is a module of its own under scripts/notices, which is what keeps the licence
+  # detector it uses out of the server's go.mod while still pinning it by version and checksum.
+  notices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: Regenerate the third-party notices and compare
+        run: make notices-check
+
+  # The deployment configurations are the part a stranger runs first, and nothing else in CI
+  # touches them — a syntax error or an unformatted file would be found by the person trying
+  # to use the project, which is the worst place to find it. Validation needs no credentials:
+  # -backend=false skips state entirely and only checks the configuration is coherent.
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_wrapper: false
+      - name: Format and validate every configuration
+        run: |
+          set -eu
+          failed=0
+          for dir in deploy/terraform/*/ deploy/terraform/idp/*/; do
+            [ -f "$dir/main.tf" ] || continue
+            echo "==> $dir"
+            terraform -chdir="$dir" fmt -check -diff || failed=1
+            terraform -chdir="$dir" init -backend=false -input=false >/dev/null
+            terraform -chdir="$dir" validate || failed=1
+          done
+          exit "$failed"
+
+      # The check block that verifies an OAuth client shells out to this. A shell syntax
+      # error there would surface as a broken plan for somebody setting the project up.
+      - name: Check the shell it shells out to
+        run: sh -n deploy/terraform/google/scripts/check-redirect-uris.sh
+
+  # A leaked credential in the history cannot be removed once this repository is public, so
+  # the check runs on every change rather than before release.
+  #
+  # On a pull request the action asks the API which commits the PR contains, which the
+  # workflow-level contents:read does not cover. Without this it exits 403 before scanning a
+  # single line — a red check that looks like a failed scan and is actually no scan at all,
+  # on precisely the event where unreviewed code arrives.
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      # Scans the commits this event introduced, which is the fast, targeted half: when it
+      # fails it names the commit somebody just wrote.
+      # .gitleaksignore is at the repository root rather than beside this file, because this
+      # step reads it from the source directory and has no flag to point elsewhere. Under
+      # .github/ it was read by the full-history step below and not by this one, so an
+      # excused finding still failed the build whenever it fell inside a pull request's own
+      # commit range — which is the only range this step ever looks at.
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Off so the grant above can stay read-only. Left on, the action posts a comment
+          # when it finds something, which needs pull-requests:write — a write grant on a
+          # public repository, bought to make a failure more legible at exactly the moment
+          # the job already fails loudly and the log already names the file and line.
+          GITLEAKS_ENABLE_COMMENTS: false
+
+      # The step above is an increment, and an increment is only as good as the range it
+      # derives. On main that range is routinely empty: it asks git for --no-merges
+      # --first-parent over the pushed commits, a merge arrives on main's first-parent line
+      # as a merge commit, and the two filters between them leave nothing. The push that
+      # landed #1 and #2 covered sixty-odd commits of new code, reported "0 commits scanned",
+      # and went green.
+      #
+      # Publication is what makes a leaked credential permanent, so the whole history is what
+      # gets scanned, on every event, with no arithmetic in front of it. It takes under a
+      # second on this repository.
+      - name: Scan the whole history
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 \
+            detect --source=/repo \
+                   --gitleaks-ignore-path=/repo/.gitleaksignore \
+                   --redact -v --exit-code=1 2>&1 | tee /tmp/scan.log
+
+          # A scan that examined nothing exits zero and reads exactly like a clean one. That
+          # is the failure this job has actually been having, so the commit count is asserted
+          # rather than assumed. It is worth having once.
+          scanned=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/scan.log |
+            sed -n 's/.* \([0-9][0-9]*\) commits scanned.*/\1/p' | tail -1)
+          echo "commits scanned: ${scanned:-none}"
+          if [ -z "${scanned}" ] || [ "${scanned}" -lt 1 ]; then
+            echo "the scan reported no commits, so it proved nothing; failing"
+            exit 1
+          fi

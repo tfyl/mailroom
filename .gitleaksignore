@@ -1,0 +1,16 @@
+# Deliberately empty.
+#
+# Every entry this file can hold is a fingerprint — commit, file, rule, line — so it is
+# invalidated wholesale by any history rewrite, and by any edit that moves a line. Squashing
+# main to a single root commit turned six reviewed-and-excused findings back into six failures
+# on the next push, for a repository in which nothing had changed.
+#
+# The two genuine non-credentials are excused where they live instead, with an inline
+# `gitleaks:allow` on the line in internal/preflight/preflight_test.go. That travels with the
+# line through a rewrite, a rebase, or a reformat, and it is readable next to the thing it is
+# talking about rather than as a hash in a file somewhere else.
+#
+# Prefer that. Add a fingerprint here only for a finding that has no line to annotate — one in
+# a binary, or in a commit message — and expect to regenerate it after any rewrite:
+#   docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 \
+#     detect --source=/repo --redact --report-format=json --report-path=/dev/stdout

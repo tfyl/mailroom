@@ -1,0 +1,309 @@
+{{define "content"}}
+<h1>Grants</h1>
+<p class="lede">
+  Every access token issued to a client, and what each one reaches right now. This is the page
+  to open when something is behaving in a way you did not expect.
+</p>
+
+{{if .Edited}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <strong>Saved.</strong>
+  <section>
+    <p>{{.Edited}} reaches what is shown below from its next call onwards.</p>
+  </section>
+</div>
+{{end}}
+
+{{if .Removed}}
+{{/* Said after the fact rather than asked before it, and the second sentence is the whole
+     reason it can be: nothing was destroyed, so there is nothing to warn about — only
+     something to be clear about, since "removed" is a word that usually means more than this
+     one does. It is also the only feedback there is when the last revoked grant goes, because
+     the band it was in goes with it. */}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <strong>{{if eq .Removed 1}}Removed 1 revoked grant.{{else}}Removed {{.Removed}} revoked grants.{{end}}</strong>
+  <section>
+    <p>
+      Off this page, and nothing more than that. Access ended when it was revoked, and the
+      audit log still holds every row it wrote, under the name it wrote them with.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{template "mcpEndpoint" .}}
+
+{{/* The bands are named, so where "still has access" ends is visible without reading the
+     badge on every card. Named whenever there is a live grant at all rather than only when
+     there is a second band to contrast with, because a heading that comes and goes moves
+     everything under it between one visit and the next. */}}
+{{if .SharedLabels}}
+{{/* Said only when it has happened, and said plainly. The name on a grant is whatever the
+     client sent when it registered, so several clients — or the same client, connected
+     twice — arrive carrying the same one. Editing the wrong one of a matching pair looks
+     exactly like an edit that did nothing. */}}
+{{/* Marked out rather than shouted: this is the warning token's job — something that needs
+     attention and is not broken. A destructive alert would say a failure had happened, and
+     nothing has yet; the failure is the edit somebody is about to make. */}}
+<div class="alert mb-6" data-variant="warning">
+  {{template "iconAlert"}}
+  <strong>{{.SharedLabels}} of these grants share a name with another.</strong>
+  <section>
+    <p>
+      A grant&rsquo;s name is whatever the client sent and nothing keeps it unique, so the name
+      alone cannot tell you which grant a client is holding. Those that collide carry their id
+      beside the name. <strong>Used most recently</strong> is the better signal: it is the
+      grant something presented last, which is almost always the one you meant.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{if .Live}}<h2 class="mt-0 mb-3">Still has access</h2>{{end}}
+
+<div class="grid gap-3">
+{{range .Live}}
+  <div class="card" data-size="sm">
+    <section class="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+      <div class="min-w-0 flex-1 basis-80">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="m-0 font-semibold wrap-anywhere">{{.Label}}</h3>
+          {{/* The label is whatever the client sent, and two clients can send the same one.
+               Where that has happened the id goes beside it, because it is the only handle
+               on this grant that is certainly not on another. */}}
+          {{if .Ambiguous}}<span class="grant-id mono">#{{.ShortID}}</span>{{end}}
+          {{if .MostRecent}}<span class="badge" data-variant="success">used most recently</span>{{end}}
+          {{if .ExpiresSoon}}<span class="badge" data-variant="warning">{{.ExpiresWhen}}</span>{{end}}
+          {{if not .LastUsed}}
+            <span class="badge" data-variant="outline">never used</span>
+          {{else if .Idle}}
+            <span class="badge" data-variant="outline">unused for {{.LastUsedAgo}}</span>
+          {{end}}
+        </div>
+
+        {{/* A labelled row each, rather than one comma-separated run. The privileged
+             capabilities get a row to themselves because they are usually why somebody
+             opened this page, and a heading naming them is legible to a reader who cannot
+             see the tint on the badges underneath it. */}}
+        {{/* Mailboxes first and counted. Two grants with the same name and the same
+             capabilities differed only in how many mailboxes they covered — five against
+             six — which is unreadable as two wrapped rows of badges and obvious as a
+             number. Last used is a fact of its own rather than a date in the small print,
+             because it is what says which of two identically named grants a client is
+             holding. */}}
+        <dl class="facts">
+          <dt>Reaches</dt>
+          <dd>
+            {{if gt (len .Accounts) 2}}<span class="text-muted-foreground">{{len .Accounts}} mailboxes:</span>{{end}}
+            {{range .Accounts}}<span class="badge" data-variant="secondary">{{.}}</span>{{else}}<span class="text-muted-foreground">no mailboxes</span>{{end}}
+          </dd>
+          <dt>May</dt>
+          <dd>
+            {{range .Caps}}<span class="badge mono" data-variant="outline">{{.Name}}</span>{{else}}<span class="text-muted-foreground">nothing on its own</span>{{end}}
+          </dd>
+          {{if .Privileged}}
+          <dt>Privileged</dt>
+          <dd>
+            {{range .Privileged}}<span class="badge mono" data-variant="warning">{{.Name}}</span>{{end}}
+          </dd>
+          {{end}}
+          {{/* What it may do without asking, beside what it may do at all. The two answer
+               different halves of the same question, and an operator who has opened this page
+               because a client did something surprising is looking for both. */}}
+          <dt>Acts</dt>
+          <dd>
+            <span class="badge mono" data-variant="{{if .Mode.Enforced}}success{{else}}outline{{end}}">{{.Mode.Name}}</span>
+            <span class="text-muted-foreground">{{.Mode.Title}}</span>
+          </dd>
+          <dt>Last used</dt>
+          <dd>
+            {{if .LastUsed}}<span class="font-medium">{{.LastUsedAgo}}</span>
+            <span class="text-muted-foreground">&middot; {{.LastUsed}}</span>
+            {{else}}<span class="text-muted-foreground">never used</span>{{end}}
+          </dd>
+        </dl>
+
+        <p class="grant-dates">
+          <span>created {{.CreatedAt.Format "2 Jan 2006"}}</span>
+          {{if .ExpiresIn}}<span>{{.ExpiresIn}}</span>{{end}}
+          {{if .Ambiguous}}<span class="mono">{{.ID}}</span>{{end}}
+        </p>
+      </div>
+
+      {{/* Revoking is irreversible and editing is not, so the two are not buttons of equal
+           weight side by side. Edit is the control; revoking is the word, in the colour of
+           what it does, a gap away from it — and the filled destructive button lives on the
+           confirmation page it opens, where it is the only thing there is to press. */}}
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <a class="btn" data-variant="outline" href="/grants/edit?id={{.ID}}">Edit scope</a>
+        <form method="post" action="/grants/revoke">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button class="btn btn-revoke" data-variant="ghost">Revoke&hellip;</button>
+        </form>
+      </div>
+    </section>
+  </div>
+{{else}}
+  {{if not (or .Lapsed .Revoked)}}
+  <div class="card">
+    <section class="empty py-6 text-sm text-muted-foreground">
+      No grants yet. One appears here when a client connects and you approve it.
+    </section>
+  </div>
+  {{else}}
+  <div class="card">
+    <section class="empty py-6 text-sm text-muted-foreground">
+      Nothing has access. Every grant below has either expired or been revoked.
+    </section>
+  </div>
+  {{end}}
+{{end}}
+</div>
+
+{{if .Lapsed}}
+{{/* A third state, and not a footnote to either neighbour. These reach nothing today, so they
+     are not among the grants that do; but unlike a revoked one, each is a single edit — a new
+     expiry — from working again, which is why they are still shown whole and still editable. */}}
+<h2>Expired</h2>
+<p class="prose mb-3">
+  Not revoked, and reaching nothing. A client presenting one of these is refused until you give
+  it a new expiry, which you can do from Edit scope without the client authorising again.
+</p>
+<div class="grid gap-3">
+{{range .Lapsed}}
+  <div class="card" data-size="sm">
+    <section class="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+      <div class="min-w-0 flex-1 basis-80">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="m-0 font-semibold wrap-anywhere">{{.Label}}</h3>
+          {{if .Ambiguous}}<span class="grant-id mono">#{{.ShortID}}</span>{{end}}
+          <span class="badge" data-variant="warning">expired</span>
+          {{if not .LastUsed}}<span class="badge" data-variant="outline">never used</span>{{end}}
+        </div>
+        <dl class="facts">
+          <dt>Reached</dt>
+          <dd>
+            {{if gt (len .Accounts) 2}}<span class="text-muted-foreground">{{len .Accounts}} mailboxes:</span>{{end}}
+            {{range .Accounts}}<span class="badge" data-variant="secondary">{{.}}</span>{{else}}<span class="text-muted-foreground">no mailboxes</span>{{end}}
+          </dd>
+          <dt>Could</dt>
+          <dd>
+            {{range .Caps}}<span class="badge mono" data-variant="outline">{{.Name}}</span>{{else}}<span class="text-muted-foreground">nothing on its own</span>{{end}}
+          </dd>
+          {{if .Privileged}}
+          <dt>Privileged</dt>
+          <dd>
+            {{range .Privileged}}<span class="badge mono" data-variant="warning">{{.Name}}</span>{{end}}
+          </dd>
+          {{end}}
+          <dt>Acts</dt>
+          <dd>
+            <span class="badge mono" data-variant="{{if .Mode.Enforced}}success{{else}}outline{{end}}">{{.Mode.Name}}</span>
+            <span class="text-muted-foreground">{{.Mode.Title}}</span>
+          </dd>
+        </dl>
+        <p class="grant-dates">
+          <span>created {{.CreatedAt.Format "2 Jan 2006"}}</span>
+          <span>{{if .LastUsed}}last used {{.LastUsedAgo}}, {{.LastUsed}}{{else}}never used{{end}}</span>
+          {{if .Ambiguous}}<span class="mono">{{.ID}}</span>{{end}}
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <a class="btn" data-variant="outline" href="/grants/edit?id={{.ID}}">Edit scope</a>
+        <form method="post" action="/grants/revoke">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button class="btn btn-revoke" data-variant="ghost">Revoke&hellip;</button>
+        </form>
+      </div>
+    </section>
+  </div>
+{{end}}
+</div>
+{{end}}
+
+{{if or .Live .Lapsed}}
+<p class="prose mt-6">
+  Editing changes what a grant reaches without the client authorising again: its token keeps
+  working, and does whatever you leave it doing from its next call onwards. Handing something
+  over is shown to you first, because nobody at the client&rsquo;s end is asked again.
+</p>
+<p class="prose mt-3">
+  Revoking cannot be undone. The client loses access on its next call, and getting it back
+  means authorising from scratch &mdash; which needs whoever runs the client, not just you.
+</p>
+{{end}}
+
+{{if .Revoked}}
+{{/* Kept, and out of the way. Nothing here can be acted on or can change again, so it sits
+     behind a summary rather than among the grants that can. Forced open after a removal: a
+     redirect draws this page from scratch, and a disclosure that shut on every press would
+     hide the list somebody is working through. */}}
+<details class="advanced mt-8"{{if .RevokedOpen}} open{{end}}>
+  <summary>{{if eq (len .Revoked) 1}}1 revoked grant{{else}}{{len .Revoked}} revoked grants{{end}}</summary>
+  {{/* Said before the buttons rather than beside each one. Remove is a word that normally
+       means destroyed, and here it does not: the row leaves this page, the audit log keeps
+       what the grant did, and the name stays on it. Claiming otherwise would be the copy
+       promising something the store deliberately does not do. */}}
+  <p class="prose mb-3">
+    These lost access when you revoked them and cannot get it back. Removing one takes it off
+    this page &mdash; nothing else changes, and the audit log keeps every row it wrote, still
+    under its name.
+  </p>
+  <div class="grid gap-2">
+    {{range .Revoked}}
+    <div class="card" data-size="sm">
+      <section class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span class="font-medium wrap-anywhere">{{.Label}}</span>
+        {{if .Ambiguous}}<span class="grant-id mono">#{{.ShortID}}</span>{{end}}
+        <span class="badge" data-variant="outline">revoked</span>
+        <span class="text-xs text-muted-foreground">
+          reached {{range $i, $a := .Accounts}}{{if $i}}, {{end}}{{$a}}{{end}}
+          &middot; created {{.CreatedAt.Format "2 Jan 2006"}}
+        </span>
+        {{/* The word, in the colour of what it does, at the far end of the row it belongs
+             to. Not the filled destructive button: that one belongs on a confirmation page,
+             and this action does not have one because it ends nothing. */}}
+        <form method="post" action="/grants/remove" class="ms-auto">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button class="btn btn-revoke" data-variant="ghost" data-size="sm">Remove</button>
+        </form>
+      </section>
+    </div>
+    {{end}}
+  </div>
+
+  {{if gt (len .Revoked) 1}}
+  {{/* Five revoked grants is five presses, and clearing the list is one thing somebody wants
+       rather than five. The tick is the guard, as it is for unlinking: this button acts on
+       grants that may be scrolled past, which is exactly what a bare button cannot ask about.
+       A confirmation page would say less than this block already does. */}}
+  <div class="danger mt-4">
+    <h3>Remove them all</h3>
+    <p class="prose">
+      All {{len .Revoked}} leave this page at once. Every one of them is already revoked, so
+      no access changes and no audit history is lost &mdash; the log still names each of them
+      on the rows they wrote.
+    </p>
+    <form method="post" action="/grants/remove-all" class="grid gap-3">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <div class="field">
+        <label for="remove-all-revoked" data-variant="destructive">
+          <input class="input" type="checkbox" id="remove-all-revoked" name="understood"
+                 value="1" required>
+          <span class="font-normal">
+            Take all {{len .Revoked}} revoked grants off this page.
+          </span>
+        </label>
+      </div>
+      <button class="btn w-fit" data-variant="destructive">Remove {{len .Revoked}} revoked grants</button>
+    </form>
+  </div>
+  {{end}}
+</details>
+{{end}}
+{{end}}

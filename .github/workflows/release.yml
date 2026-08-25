@@ -1,0 +1,142 @@
+name: Release
+
+# Publishes the container image. `main` gets :main and :sha-<commit> so a deployment can
+# track the branch; a tag additionally gets :<version> and :latest, which is what anything
+# long-lived should pin to.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+# Two pushes to main in quick succession start two runs that both write :main, and the tag
+# keeps whatever the *slower* one pushed — which is how :main came to point at a commit older
+# than main. Superseding the earlier run makes the newest push the one that lands, at the
+# cost of the overtaken commit never getting its :sha- image, which is the right trade for a
+# tag whose whole purpose is to mean "current main". Tags group by ref, so a v* release is
+# never cancelled by branch activity.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Both architectures are still published: the cluster this deploys to is amd64 and the
+      # machines it gets developed on are arm64 Macs. Neither is emulated any more. The build
+      # stage is pinned to the runner's own architecture and cross-compiles (see the
+      # Dockerfile), and the runtime stage only copies files, which BuildKit does natively —
+      # leaving setup-qemu-action with nothing to run.
+      #
+      # Leaving the emulator uninstalled is also what keeps it that way. A RUN added to the
+      # runtime stage, or a build stage that loses its --platform pin, fails here loudly
+      # instead of quietly costing a quarter of an hour per release.
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Stamped into internal/mcp.Version, which the MCP handshake reports to clients.
+          # Without it every deployment identifies itself as "dev".
+          build-args: |
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || format('main-{0}', github.sha) }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A published image nobody has started is not a released image. distroless failures —
+      # a missing directory, wrong ownership — appear only at runtime, so the pushed
+      # artifact gets started once before the job is called green.
+      #
+      # Forward-auth is the login method with no external dependency: an OIDC provider would
+      # make the smoke test reach the issuer's discovery document, so a release would start
+      # failing whenever somebody else's service was down. `doctor` is left out for the same
+      # reason — it asks Google about redirect URIs, which is the point of it and the wrong
+      # thing to gate a release on.
+      #
+      # It runs against a named volume because that is how a deployment runs it, and /data
+      # is where this image has already gone wrong once: a volume seeded from an unstaged
+      # image path arrives root-owned and SQLite refuses it with "unable to open database
+      # file". A container started with no volume at all would still exercise that, but only
+      # for as long as the Dockerfile keeps declaring VOLUME /data, which is a thin thread to
+      # hang the check on.
+      - name: Smoke-test the published image
+        run: |
+          set -euo pipefail
+          IMAGE=$(echo '${{ steps.meta.outputs.tags }}' | head -1)
+
+          # Also exercises the subcommand path, and is what the docs tell operators to run.
+          KEY=$(docker run --rm "$IMAGE" generate-key)
+          [ -n "$KEY" ] || { echo "generate-key produced nothing"; exit 1; }
+
+          docker volume create mailroom-smoke >/dev/null
+          docker run -d --name smoke -p 8080:8080 \
+            -v mailroom-smoke:/data \
+            -e MAILROOM_PUBLIC_URL=http://localhost:8080 \
+            -e MAILROOM_ENCRYPTION_KEY="$KEY" \
+            -e MAILROOM_AUTH_PROVIDERS=forward \
+            -e MAILROOM_TRUSTED_PROXIES=127.0.0.1/32 \
+            "$IMAGE"
+
+          serving=
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/.well-known/oauth-protected-resource >/dev/null; then
+              serving=yes; break
+            fi
+            sleep 1
+          done
+          if [ -z "$serving" ]; then
+            echo "image did not serve within 30s"; docker logs smoke; exit 1
+          fi
+
+          # Named explicitly so a failure reads as "the volume is unwritable" rather than as
+          # a timeout thirty seconds earlier. docker cp rather than a second container with a
+          # shell in it: the image is distroless and has none, and reaching for one that does
+          # would put a Docker Hub pull between this release and a green tick.
+          if ! docker cp smoke:/data/mailroom.db - > /dev/null 2>&1; then
+            echo "no database on the volume: /data is not writable by the image user"
+            docker logs smoke; exit 1
+          fi
+
+          # The operator interface is the half of the product the discovery documents say
+          # nothing about: different handlers, and HTML templates that are parsed rather than
+          # marshalled. A broken template leaves /.well-known/* answering perfectly.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/)
+          case "$code" in
+            2*|3*) ;;
+            *) echo "operator interface answered $code"; docker logs smoke; exit 1 ;;
+          esac
+
+          echo "image serves, writes its database and renders"
+          docker rm -f smoke >/dev/null
+          docker volume rm mailroom-smoke >/dev/null

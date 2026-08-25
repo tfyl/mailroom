@@ -1,0 +1,71 @@
+{{define "content"}}
+<h1>Revoke {{.Grant.Label}}?</h1>
+<p class="lede">
+  This cannot be undone. The client loses access on its next call, and getting it back means
+  authorising it again from scratch &mdash; which needs whoever runs the client, not just you.
+</p>
+
+<div class="card" data-size="sm">
+  <section>
+    <div class="flex flex-wrap items-center gap-2">
+      <h2 class="m-0 text-base font-semibold wrap-anywhere">{{.Grant.Label}}</h2>
+      <span class="grant-id mono">#{{.Grant.ShortID}}</span>
+    </div>
+    <dl class="facts">
+      <dt>Reaches</dt>
+      <dd>
+        {{range .Grant.Accounts}}<span class="badge" data-variant="secondary">{{.}}</span>{{else}}<span class="text-muted-foreground">no mailboxes</span>{{end}}
+      </dd>
+      <dt>May</dt>
+      <dd>
+        {{range .Grant.Caps}}<span class="badge mono" data-variant="outline">{{.Name}}</span>{{else}}<span class="text-muted-foreground">nothing on its own</span>{{end}}
+      </dd>
+      {{if .Grant.Privileged}}
+      <dt>Privileged</dt>
+      <dd>
+        {{range .Grant.Privileged}}<span class="badge mono" data-variant="warning">{{.Name}}</span>{{end}}
+      </dd>
+      {{end}}
+      <dt>Last used</dt>
+      <dd>
+        {{if .Grant.LastUsed}}<span class="font-medium">{{.Grant.LastUsedAgo}}</span>
+        <span class="text-muted-foreground">&middot; {{.Grant.LastUsed}}</span>
+        {{else}}<span class="text-muted-foreground">never used</span>{{end}}
+      </dd>
+    </dl>
+    <p class="grant-dates">
+      <span>created {{.Grant.CreatedAt.Format "2 Jan 2006"}}</span>
+      {{if .Grant.ExpiresIn}}<span>{{.Grant.ExpiresIn}}</span>{{end}}
+      <span class="mono">{{.Grant.ID}}</span>
+    </p>
+  </section>
+</div>
+
+<h2>What stops working</h2>
+<ul class="consequences">
+  <li>
+    The token this client holds stops resolving. Every tool call it makes after that returns an
+    error rather than mail, and it will not recover on its own.
+  </li>
+  <li>
+    Nothing else is touched: your mailboxes stay linked, no mail is changed or deleted, and the
+    rows this grant already wrote to the audit log stay exactly where they are.
+  </li>
+  <li>
+    Getting it back is a new grant, approved on a new consent screen. It cannot be un-revoked,
+    and this one&rsquo;s history does not come with it.
+  </li>
+</ul>
+
+{{/* Keeping it is the safe answer and comes first; revoking sits at the other end of the row,
+     where nothing else can be pressed by mistake. */}}
+<div class="decision">
+  <a class="btn" data-variant="outline" href="/grants">Keep it</a>
+  <form method="post" action="/grants/revoke">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="id" value="{{.Grant.ID}}">
+    <input type="hidden" name="confirm" value="yes">
+    <button class="btn" data-variant="destructive" data-size="lg">Revoke {{.Grant.Label}}</button>
+  </form>
+</div>
+{{end}}

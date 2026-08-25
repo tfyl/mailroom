@@ -1,0 +1,31 @@
+/* Basecoat vega — Empty. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .empty {
+    @apply gap-4 rounded-lg border-dashed p-12;
+  }
+
+  .empty > header {
+    @apply gap-2;
+  }
+
+  .empty figure {
+    @apply mb-2;
+  }
+
+  .empty figure:has(> svg:only-child) {
+    @apply bg-muted text-foreground flex size-10 shrink-0 items-center justify-center rounded-lg [&_svg:not([class*='size-'])]:size-6;
+  }
+
+  .empty :is(h2, h3, h4) {
+    @apply text-lg font-medium tracking-tight;
+  }
+
+  .empty > header > p {
+    @apply text-muted-foreground text-sm/relaxed;
+  }
+
+  .empty > :is(section, footer) {
+    @apply gap-4 text-sm;
+  }
+
+}

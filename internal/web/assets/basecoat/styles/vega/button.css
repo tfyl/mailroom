@@ -1,0 +1,65 @@
+/* Basecoat vega — Button. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .btn {
+    @apply rounded-md border border-transparent bg-clip-padding text-sm font-medium focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 active:not-aria-[haspopup]:translate-y-px [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .btn:not([data-size]),
+  .btn[data-size='default'] {
+    @apply h-9 gap-1.5 px-2.5 has-[[data-icon='inline-end']]:pr-2 has-[[data-icon='inline-start']]:pl-2;
+  }
+
+  .btn[data-size='xs'] {
+    @apply h-6 gap-1 px-2 text-xs rounded-[min(var(--radius-md),8px)] [&_svg:not([class*='size-'])]:size-3 has-[[data-icon='inline-end']]:pr-1.5 has-[[data-icon='inline-start']]:pl-1.5;
+  }
+
+  .btn[data-size='sm'] {
+    @apply h-8 gap-1 px-2.5 rounded-[min(var(--radius-md),10px)] has-[[data-icon='inline-end']]:pr-1.5 has-[[data-icon='inline-start']]:pl-1.5;
+  }
+
+  .btn[data-size='lg'] {
+    @apply h-10 gap-1.5 px-2.5 has-[[data-icon='inline-end']]:pr-2 has-[[data-icon='inline-start']]:pl-2;
+  }
+
+  .btn[data-size='icon'] {
+    @apply size-9;
+  }
+
+  .btn[data-size='icon-xs'] {
+    @apply size-6 rounded-[min(var(--radius-md),8px)] [&_svg:not([class*='size-'])]:size-3;
+  }
+
+  .btn[data-size='icon-sm'] {
+    @apply size-8 rounded-[min(var(--radius-md),10px)];
+  }
+
+  .btn[data-size='icon-lg'] {
+    @apply size-10;
+  }
+
+  .btn:not([data-variant]),
+  .btn[data-variant='primary'] {
+    @apply bg-primary text-primary-foreground hover:bg-primary/80;
+  }
+
+  .btn[data-variant='secondary'] {
+    @apply bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground;
+  }
+
+  .btn[data-variant='outline'] {
+    @apply border-border bg-background shadow-xs hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 aria-expanded:bg-muted aria-expanded:text-foreground;
+  }
+
+  .btn[data-variant='ghost'] {
+    @apply hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground;
+  }
+
+  .btn[data-variant='link'] {
+    @apply text-primary underline-offset-4 hover:underline;
+  }
+
+  .btn[data-variant='destructive'] {
+    @apply bg-destructive/10 text-destructive hover:bg-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40;
+  }
+
+}

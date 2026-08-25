@@ -1,0 +1,51 @@
+/* Basecoat vega — Card. Vendored by scripts/vendor-basecoat.sh. */
+@layer components {
+  .card {
+    @apply ring-foreground/10 bg-card text-card-foreground overflow-hidden rounded-xl text-sm shadow-xs ring-1 has-[>img:first-child]:pt-0 [&>img:first-child]:rounded-t-xl [&>img:last-child]:rounded-b-xl;
+  }
+
+  .card {
+    @apply gap-6 py-6;
+  }
+
+  .card[data-size='sm'] {
+    @apply gap-4 py-4;
+  }
+
+  .card > header {
+    @apply gap-1 rounded-t-xl px-6 [.border-b]:pb-6;
+  }
+
+  .card[data-size='sm'] > header {
+    @apply px-4 [.border-b]:pb-4;
+  }
+
+  .card > header > :is(h2, h3, [data-title], .card-title) {
+    @apply text-base leading-normal font-medium;
+  }
+
+  .card[data-size='sm'] > header > :is(h2, h3, [data-title], .card-title) {
+    @apply text-sm;
+  }
+
+  .card > header > :is(p, [data-description], .card-description) {
+    @apply text-muted-foreground text-sm;
+  }
+
+  .card > section {
+    @apply px-6;
+  }
+
+  .card[data-size='sm'] > section {
+    @apply px-4;
+  }
+
+  .card > footer {
+    @apply rounded-b-xl px-6 [.border-t]:pt-6;
+  }
+
+  .card[data-size='sm'] > footer {
+    @apply px-4 [.border-t]:pt-4;
+  }
+
+}

@@ -1,0 +1,350 @@
+{{define "content"}}
+<h1>Authorize {{.Req.ClientName}}</h1>
+<p class="lede">
+  This client wants to reach your mail through mailroom. Nothing below is ticked until you tick
+  it, and what you tick is what it gets &mdash; on those mailboxes, for that long, and no
+  further.
+</p>
+
+{{/*
+  Where an approved code actually goes, which is the one thing this page never used to say.
+  Registration is open, so the name in the heading is whatever a stranger typed; the callback is
+  what that stranger had to commit to before anybody looked at it, and it is where the access
+  ends up. So it comes before the scope, and it is the origin rather than the whole URI — a long
+  enough path pushes the host out of sight, and the host is the part being read.
+
+  Three destinations, three notices, because they are three different questions. Remote is the
+  one that has to be recognised and it is the one marked; loopback and a private scheme both go
+  to something already on this machine, and are stated rather than flagged. Marking all three
+  alike would make the mark mean "you are on the consent screen", which is not information.
+*/}}
+{{with .Req.Redirect}}{{if .Origin}}
+{{if eq .Kind "remote"}}
+<div class="alert mb-6" data-variant="warning">
+  {{template "iconAlert"}}
+  <strong>Approving sends a code to
+    <span class="mono wrap-anywhere" data-redirect-origin>{{.Origin}}</span>. Whoever receives
+    it gets everything you tick below.</strong>
+  <section>
+    <p>
+      That is the callback this client registered, and mailroom will not send the code anywhere
+      else. The name at the top of this page is not evidence of anything: a client chooses its
+      own name when it registers, anyone may register, and two of them may choose the same name.
+      Read the address instead, and if it is not the client you meant to authorise, deny.{{if not .ASCIIHost}}
+      This one is not written in ASCII letters, which is a way of drawing a name so that it
+      reads as a different name.{{end}}
+    </p>
+  </section>
+</div>
+{{else if eq .Kind "loopback"}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <strong>Approving sends a code to
+    <span class="mono wrap-anywhere" data-redirect-origin>{{.Origin}}</span> &mdash; a program
+    on this computer.</strong>
+  <section>
+    <p>
+      A loopback address never leaves this machine, so the code goes to something running here
+      rather than out to a website somewhere. That is how a desktop client receives one. If you
+      did not just start a client on this computer, deny.
+    </p>
+  </section>
+</div>
+{{else}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <strong>Approving sends a code to
+    <span class="mono wrap-anywhere" data-redirect-origin>{{.Origin}}</span> &mdash; a private
+    scheme, which this computer hands to an installed program.</strong>
+  <section>
+    <p>
+      Which program gets it is decided by this computer rather than by mailroom, and any
+      application installed here can claim a scheme. If you do not recognise it as the client
+      you are authorising, deny.
+    </p>
+  </section>
+</div>
+{{end}}
+{{end}}{{end}}
+
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  {{if .Requested}}
+  <strong>It asked for
+    {{range $i, $c := .Requested}}{{if $i}}, {{end}}<span class="mono">{{$c}}</span>{{end}}.</strong>
+  <section>
+    <p>
+      That is the request. The grant is what you tick below, and the two are allowed to
+      differ: less than was asked for is a working grant, and more than was asked for is worth
+      a second look before you approve it.{{if .RequestedUnknown}} It also asked for things
+      this build has no capability for, which are not listed and cannot be granted.{{end}}
+    </p>
+  </section>
+  {{else}}
+  <strong>It asked for nothing this build recognises.</strong>
+  <section>
+    <p>
+      The client named no capability mailroom knows, so there is nothing to compare your
+      choices against. Everything it gets is what you tick below.
+    </p>
+  </section>
+  {{end}}
+</div>
+
+{{/*
+  data-enhance names the one thing the script does on this page: select-all without the round
+  trip, and a running account of what Approve would grant. Every control inside works with the
+  script absent — the buttons below are real submit buttons posting to a real endpoint — and
+  that is the rule rather than an accident of this page. docs/ui.md, internal/web/static/app.js.
+*/}}
+<form method="post" action="/authorize/approve" data-enhance="consent">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <input type="hidden" name="request_id" value="{{.Req.RequestID}}">
+
+  <div class="card" data-size="sm">
+    <section class="field">
+      <label for="grant-label">Name this grant</label>
+      <input class="input max-w-md" type="text" id="grant-label" name="label" value="{{.Req.Label}}"
+             placeholder="Claude &mdash; work triage" required>
+      <p>Shown on the grants page, so you can tell this one from the next.</p>
+    </section>
+  </div>
+
+  {{/*
+    Deselect comes first in each of these pairs on purpose. Pressing Enter in the grant-name
+    field submits the form through whichever submit button appears first in the markup, and
+    the only button that is safe to reach by accident on a consent screen is one that can
+    only narrow what is ticked. Reversing this pair would make an absent-minded Enter tick
+    every mailbox instead. The script keeps that true rather than working around it: it acts
+    on the submit event and the submitter the browser reports, which for an implicit
+    submission is this same button.
+  */}}
+  <div class="card mt-6">
+    <header>
+      <h2 class="m-0">Which mailboxes</h2>
+      <p class="m-0">
+        Only the ones you tick, including the mail that arrives in them later. The rest stay
+        out of reach.
+      </p>
+      {{if .Accounts}}
+      <div class="card-action button-group">
+        <button class="btn" data-variant="outline" data-size="sm" name="reselect" value="no-mailboxes"
+                formaction="/authorize/reselect" formnovalidate>Clear</button>
+        <button class="btn" data-variant="outline" data-size="sm" name="reselect" value="all-mailboxes"
+                formaction="/authorize/reselect" formnovalidate>Select all</button>
+      </div>
+      {{end}}
+    </header>
+    <section class="grid gap-2 sm:grid-cols-2">
+      {{range .Accounts}}
+      <div class="field">
+        <label for="mailbox-{{.ID}}">
+          <input class="input" type="checkbox" id="mailbox-{{.ID}}" name="accounts" value="{{.ID}}"
+                 {{if .Checked}}checked{{end}}>
+          <span class="min-w-0 font-normal">
+            <span class="block font-medium wrap-anywhere">{{.Alias}}</span>
+            <span class="mono block break-all text-muted-foreground">{{mailAddress .Address}}</span>
+          </span>
+        </label>
+      </div>
+      {{else}}
+      <div class="empty py-6 text-sm text-muted-foreground">
+        No mailboxes linked. Link one before granting access.
+      </div>
+      {{end}}
+    </section>
+    {{if .Accounts}}
+    <footer class="text-sm text-muted-foreground">
+      <span data-js-text="Select all and Clear tick or clear every mailbox in this list. Nothing is granted either way.">
+        Select all and Clear send the page back to be redrawn with the ticks changed. Nothing is
+        granted, and your other choices are kept.
+      </span>
+    </footer>
+    {{end}}
+  </div>
+
+  <div class="card mt-6">
+    <header>
+      <h2 class="m-0">What it may do</h2>
+      <p class="m-0">Whatever you tick here, it may do to every mailbox you ticked above.</p>
+      <div class="card-action button-group">
+        <button class="btn" data-variant="outline" data-size="sm" name="reselect" value="no-capabilities"
+                formaction="/authorize/reselect" formnovalidate>Clear</button>
+        <button class="btn" data-variant="outline" data-size="sm" name="reselect" value="all-capabilities"
+                formaction="/authorize/reselect" formnovalidate>Select all</button>
+      </div>
+    </header>
+
+    <section class="grid gap-2">
+      <h3 class="text-xs font-medium tracking-wide text-muted-foreground uppercase">Ordinary</h3>
+      <div class="grid gap-2 sm:grid-cols-2">
+        {{range .Caps}}{{if not .Privileged}}
+        <div class="field">
+          <label for="cap-{{.Name}}">
+            <input class="input" type="checkbox" id="cap-{{.Name}}" name="capabilities" value="{{.Name}}"
+                   {{if .Checked}}checked{{end}}>
+            <span class="min-w-0 font-normal">
+              <span class="mono font-medium">{{.Name}}</span>
+              {{if .Requested}}<span class="badge" data-variant="outline">requested</span>{{end}}
+              <span class="block text-muted-foreground">{{.Description}}</span>
+            </span>
+          </label>
+        </div>
+        {{end}}{{end}}
+      </div>
+    </section>
+
+    {{/*
+      The four that are grouped rather than merely badged. Read as one flat list of nine, the
+      difference between labelling a message and deleting it for good is a word in a badge you
+      have to be looking for. Separated, it is the shape of the page. The badge stays: the
+      grouping is a heading, and a heading is not read by somebody scanning down the ticks.
+    */}}
+    <section class="grid gap-2">
+      <h3 class="text-xs font-medium tracking-wide text-warning uppercase">Privileged</h3>
+      <p class="prose m-0">
+        These four act as you, or lose mail for good: they send in your name, take file contents
+        out, change how the mailbox itself behaves, or delete. Tick one only where the client
+        genuinely needs it.
+      </p>
+      <div class="grid gap-2 sm:grid-cols-2">
+        {{range .Caps}}{{if .Privileged}}
+        <div class="field">
+          <label for="cap-{{.Name}}" data-variant="warning">
+            <input class="input" type="checkbox" id="cap-{{.Name}}" name="capabilities" value="{{.Name}}"
+                   data-privileged="yes" {{if .Checked}}checked{{end}}>
+            <span class="min-w-0 font-normal">
+              <span class="mono font-medium">{{.Name}}</span>
+              <span class="badge" data-variant="warning">privileged</span>
+              {{if .Requested}}<span class="badge" data-variant="outline">requested</span>{{end}}
+              <span class="block text-muted-foreground">{{.Description}}</span>
+            </span>
+          </label>
+        </div>
+        {{end}}{{end}}
+      </div>
+    </section>
+
+    <footer class="grid gap-2 text-sm text-muted-foreground">
+      <span class="max-w-[68ch]">
+        Granting <span class="mono">draft</span> without <span class="mono">send</span> lets an
+        agent compose replies while a human still presses send. That is the safest useful
+        setting, and the recommended default for anything doing unattended work.
+      </span>
+      <span class="max-w-[68ch]">
+        <span class="mono">discard</span> is the other half of drafting, and it is separate for
+        the same reason. Without it an agent can write and revise drafts and cannot throw one
+        away &mdash; including a draft you wrote yourself. Tick it where tidying up after
+        itself is part of the job.
+      </span>
+      <span data-js-text="Select all and Clear tick or clear every capability in this list, privileged included.">
+        Select all and Clear send the page back the same way. Select all means everything on this
+        list, privileged included &mdash; read it again before you approve.
+      </span>
+    </footer>
+  </div>
+
+  {{/*
+    The third thing this screen decides, and the one that is not a permission. Capabilities
+    say what the client may reach; this says what it may do without stopping to ask. It is a
+    radiogroup rather than checkboxes because they are alternatives, and it arrives with one
+    selected because a grant has a mode whether or not anybody chooses one — an empty group
+    here would misdescribe what Approve does.
+
+    Each option says out loud whether it is enforced. Two of the three are wording sent to the
+    client and nothing more, and an operator picking between them has to be able to see that.
+  */}}
+  <div class="card mt-6">
+    <header>
+      <h2 class="m-0">How much it may do on its own</h2>
+      <p class="m-0">
+        Not what it may reach &mdash; that is above. This is what happens when it decides to
+        use one of the privileged capabilities you ticked.
+      </p>
+    </header>
+    <fieldset class="fieldset">
+      <legend class="sr-only">How much this client may do on its own</legend>
+      <div role="radiogroup" class="grid gap-3">
+        {{range .Modes}}
+        <div class="field">
+          <label for="mode-{{.Name}}">
+            <input class="input" type="radio" id="mode-{{.Name}}" name="mode" value="{{.Name}}"
+                   data-mode-brief="{{.Brief}}" {{if .Checked}}checked{{end}}>
+            <span class="min-w-0 flex-1 font-normal">
+              <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <strong class="mono font-medium">{{.Name}}</strong>
+                <span class="font-medium">{{.Title}}</span>
+                {{if .Enforced}}<span class="badge" data-variant="success">enforced here</span>
+                {{else}}<span class="badge" data-variant="outline">wording only</span>{{end}}
+              </span>
+              <span class="mt-1 block text-muted-foreground">{{.Summary}}</span>
+            </span>
+          </label>
+        </div>
+        {{end}}
+      </div>
+    </fieldset>
+    <footer class="text-sm text-muted-foreground">
+      <span class="max-w-[68ch]">
+        <span class="mono">confirm</span> unless you change it. Only <span class="mono">hold</span>
+        is a control: under the other two, what the client actually does is up to the client,
+        because nothing on this side refuses it. You can change this later from Grants without
+        the client authorising again.
+      </span>
+    </footer>
+  </div>
+
+  <div class="card mt-6" data-size="sm">
+    <section class="field">
+      <label for="expires-days">How long this lasts</label>
+      <select class="select max-w-3xs" id="expires-days" name="expires_days">
+        <option value="30" {{if eq .Expires "30"}}selected{{end}}>30 days</option>
+        <option value="90" {{if eq .Expires "90"}}selected{{end}}>90 days</option>
+        <option value="365" {{if eq .Expires "365"}}selected{{end}}>1 year</option>
+        <option value="never" {{if eq .Expires "never"}}selected{{end}}>Never expires</option>
+      </select>
+      <p>
+        Ninety days unless you change it &mdash; mailroom&rsquo;s default, not the
+        client&rsquo;s request. When it expires the client loses access and has to ask again,
+        and you can revoke it sooner than that from Grants at any time.
+      </p>
+    </section>
+  </div>
+
+  {{/*
+    Written by the script, and hidden without it. A summary the server rendered would be right
+    only until the next tick, and a line reading "read only" above boxes that now say send is
+    worse on this page than no line at all: this is the screen where what you are told and what
+    you are about to submit have to be the same thing. So it is computed from the boxes
+    themselves on every change, or it is not shown.
+  */}}
+  <div class="mt-8 grid gap-4">
+    <p class="max-w-[68ch] rounded-md border border-border bg-muted/40 px-4 py-3 text-sm data-[privileged=yes]:border-warning/40 data-[privileged=yes]:bg-warning/10"
+       data-consent-summary aria-live="polite" hidden></p>
+    {{/*
+      The destination again, beside the button that acts on it, because the notice at the top
+      of a long page is not what somebody is looking at when they press Approve.
+
+      Unlike the summary above it this one is rendered by the server and never hidden. The rule
+      there is that a line which cannot be kept true on every change should not be drawn at all,
+      and this one cannot go stale: the redirect is settled when the authorization request is
+      created, and no control on this page can move it.
+    */}}
+    {{with .Req.Redirect}}{{if .Origin}}
+    <p class="max-w-[68ch] text-sm text-muted-foreground">
+      Approve sends the code to
+      <span class="mono wrap-anywhere" data-redirect-origin>{{.Origin}}</span>{{if eq .Kind "loopback"}},
+      a program on this computer{{end}}. It goes nowhere else.
+    </p>
+    {{end}}{{end}}
+    <div class="flex flex-wrap items-center gap-3">
+      <button class="btn" type="submit">Approve</button>
+      <button class="btn" data-variant="outline" formaction="/authorize/deny" formnovalidate>Deny</button>
+      <span class="text-sm text-muted-foreground">
+        Deny sends the client away with nothing, and it can ask again. Nothing is granted until
+        Approve.
+      </span>
+    </div>
+  </div>
+</form>
+{{end}}

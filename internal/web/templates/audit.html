@@ -1,0 +1,141 @@
+{{define "content"}}
+<h1>Audit</h1>
+<p class="lede">
+  Every tool call: which grant, which mailbox, what it did, how it ended. Open a row for what it
+  affected. Never a message body.
+</p>
+
+{{/* The reason anybody opens this page is a call that did not go through, and finding one
+     meant reading every row. A link back to the same handler is the filter a page with no
+     script can have, and it says how large the window it is filtering is. */}}
+<div class="mb-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+  <nav class="segmented" aria-label="Which calls to show">
+    <a href="/audit" {{if not .OnlyRefused}}aria-current="page"{{end}}>Everything</a>
+    <a href="/audit?show=refused" {{if .OnlyRefused}}aria-current="page"{{end}}>Refused only ({{.Refusals}})</a>
+  </nav>
+  <p class="text-sm text-muted-foreground">
+    {{if .Total}}The {{.Total}} most recent calls{{else}}Nothing recorded yet{{end}}
+  </p>
+</div>
+
+<div class="card" data-size="sm">
+  <section class="table-container p-0">
+    <table class="table audit">
+      <caption class="sr-only">
+        Tool calls made against this account&rsquo;s grants, most recent first, grouped by day.
+        Each tool name opens to show what that call affected.
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Time</th>
+          <th scope="col">Grant</th>
+          <th scope="col">Mailbox</th>
+          <th scope="col">Tool</th>
+          <th scope="col">Outcome</th>
+        </tr>
+      </thead>
+      {{range .Days}}
+      <tbody>
+        <tr class="day">
+          <th scope="colgroup" colspan="5">{{.Label}}</th>
+        </tr>
+        {{range .Rows}}
+        <tr>
+          <td class="mono tabular-nums text-muted-foreground">{{.Time}}</td>
+          <td>{{if .Grant}}{{.Grant}}{{else}}<span class="text-muted-foreground">&mdash;</span>{{end}}</td>
+          <td>{{if .Account}}{{.Account}}{{else}}<span class="text-muted-foreground">&mdash;</span>{{end}}</td>
+          <td>
+            {{/* The tool name is its own summary, so the detail costs the line a marker and
+                 nothing else. Every row opens, including one written before any of this was
+                 recorded: a row with no marker would read as a call that affected nothing,
+                 which is a claim about the call rather than about the log. */}}
+            <details>
+              <summary class="mono">{{.Tool}}</summary>
+              <dl class="facts">
+                {{if .Undetailed}}
+                <dt>Detail</dt>
+                <dd class="text-muted-foreground">
+                  Recorded before mailroom logged what a call affected. The four columns beside
+                  this are everything the row holds.
+                </dd>
+                {{else}}
+                <dt>Capability</dt>
+                <dd>
+                  {{if .Capability}}<span class="badge" data-variant="outline">{{.Capability}}</span>
+                  {{else}}<span class="text-muted-foreground">none required</span>{{end}}
+                </dd>
+                {{if .Affected}}<dt>Affected</dt><dd>{{.Affected}}</dd>{{end}}
+                {{if .Action}}<dt>Change</dt><dd class="mono wrap-anywhere">{{.Action}}</dd>{{end}}
+                {{if .Name}}<dt>Named</dt><dd class="mono wrap-anywhere">{{.Name}}</dd>{{end}}
+                {{if .To}}
+                <dt>To</dt>
+                <dd class="wrap-anywhere">{{range .To}}<span class="mono">{{mailAddress .}}</span>{{end}}</dd>
+                {{end}}
+                {{if .Cc}}
+                <dt>Cc</dt>
+                <dd class="wrap-anywhere">{{range .Cc}}<span class="mono">{{mailAddress .}}</span>{{end}}</dd>
+                {{end}}
+                {{if .Bcc}}
+                <dt>Bcc</dt>
+                <dd class="wrap-anywhere">{{range .Bcc}}<span class="mono">{{mailAddress .}}</span>{{end}}</dd>
+                {{end}}
+                {{if .Subject}}<dt>Subject</dt><dd class="wrap-anywhere">{{.Subject}}</dd>{{end}}
+                {{if .FromDraft}}
+                <dt>Recipients</dt>
+                <dd class="text-muted-foreground">Set when the draft was written, not by this call.</dd>
+                {{end}}
+                {{if .Targets}}
+                <dt>Messages</dt>
+                <dd class="wrap-anywhere">
+                  {{range .Targets}}<span class="mono">{{.}}</span>{{end}}
+                  {{if .More}}<span class="text-muted-foreground">and {{.More}} more</span>{{end}}
+                </dd>
+                {{end}}
+                {{if .Reason}}<dt>Reason</dt><dd class="wrap-anywhere">{{.Reason}}</dd>{{end}}
+                {{end}}
+              </dl>
+            </details>
+          </td>
+          <td>
+            {{/* `ok` is the common case and is set as such. What has to be findable is the
+                 call the gate turned away — and an edit the operator made themselves, which
+                 lands in this same column and is not a failure however much it reads like
+                 one.
+
+                 `held` is marked too, and is neither of those: nothing was done and nothing
+                 was refused, and somebody still has to answer it. Drawn as plain text it was
+                 indistinguishable from `ok` at a glance, which on this column means a
+                 privileged action that is still waiting reads as one that went through. */}}
+            {{if .Refused}}<span class="badge mono" data-variant="warning">{{.Outcome}}</span>
+            {{else if .Held}}<span class="badge mono" data-variant="secondary">{{.Outcome}}</span>
+            {{else if .Changed}}<span class="badge" data-variant="outline">{{.Outcome}}</span>
+            {{else}}<span class="text-muted-foreground">{{.Outcome}}</span>{{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+      {{else}}
+      <tbody>
+        <tr>
+          <td colspan="5" class="py-6 text-center text-muted-foreground">
+            {{if .OnlyRefused}}Nothing was refused in this window.{{else}}Nothing recorded yet.{{end}}
+          </td>
+        </tr>
+      </tbody>
+      {{end}}
+    </table>
+  </section>
+</div>
+
+<p class="prose mt-4">
+  Mailboxes and grants are named as they are called now, not as they were called then: an alias
+  can be renamed, so an old row can show a name that has since moved to describing something
+  else. What the row is actually about is the mailbox id underneath it, which never changes.
+</p>
+
+<p class="prose mt-3">
+  A row names what a call affected and, for outgoing mail, where it went. It never holds what was
+  in a mailbox: no message body, and no subject or sender of a message that was read. A long list
+  of ids or recipients is cut short, and the count beside it says how many there really were.
+</p>
+{{end}}

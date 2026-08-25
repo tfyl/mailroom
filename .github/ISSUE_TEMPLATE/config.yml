@@ -1,0 +1,11 @@
+# Blank issues stay on. The forms beside this are a prompt, not a gate, and a maintainer can
+# ask for what is missing far more cheaply than a stranger can guess which form fits.
+#
+# The link below is the reason this file exists at all. It is shown on the same chooser page
+# as the forms, so somebody arriving with a vulnerability sees the private path before they
+# have typed it into a public issue — which cannot be undone once it is filed.
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/tfyl/mailroom/security/advisories/new
+    about: Report privately here rather than in a public issue. SECURITY.md has the scope.

@@ -1,0 +1,176 @@
+{{define "content"}}
+<h1>Held</h1>
+<p class="lede">
+  Privileged actions a client asked for and mailroom did not carry out. A grant set to
+  <span class="mono">hold</span> cannot send, delete, write a filter or change a vacation
+  responder on its own &mdash; each attempt waits here until you answer it.
+</p>
+
+{{if .Done}}
+<div class="alert mb-6">
+  {{template "iconInfo"}}
+  <strong>{{.Done}}</strong>
+</div>
+{{end}}
+
+{{if .Failed}}
+{{/* An action that was approved and then failed at the provider. It is out of the queue and
+     it did not happen, and both halves of that have to be said: leaving it approvable would
+     risk sending the same message twice, which is the one outcome nothing can undo. */}}
+<div class="alert mb-6" data-variant="destructive" role="alert">
+  {{template "iconAlert"}}
+  <strong>That did not go through.</strong>
+  <section>
+    <p>
+      {{.Failed}} It has left the queue and it did not happen. Ask the client to compose it
+      again if it is still wanted.
+    </p>
+  </section>
+</div>
+{{end}}
+
+<div class="grid gap-3">
+{{range .Pending}}
+  <div class="card held-pending">
+    <section>
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 class="m-0 text-base font-semibold wrap-anywhere">{{.Summary}}</h2>
+        <span class="badge" data-variant="warning">{{.KindLabel}}</span>
+        {{if .GrantRevoked}}<span class="badge" data-variant="destructive">grant revoked</span>{{end}}
+      </div>
+
+      <dl class="facts">
+        <dt>Mailbox</dt>
+        <dd><span class="badge" data-variant="secondary">{{.Account}}</span></dd>
+        <dt>Asked by</dt>
+        <dd><span class="wrap-anywhere">{{.Grant}}</span></dd>
+        <dt>Waiting</dt>
+        <dd><span class="font-medium">{{.Waiting}}</span>
+          <span class="text-muted-foreground">&middot; {{.At}}</span></dd>
+        {{if .Expires}}
+        <dt>Expires</dt>
+        <dd><span class="font-medium">{{.Expires}}</span></dd>
+        {{end}}
+      </dl>
+
+      {{if .GrantRevoked}}
+      <div class="alert mt-4" data-variant="warning">
+        {{template "iconAlert"}}
+        <strong>The grant that asked for this has been revoked.</strong>
+        <section>
+          <p>
+            The client cannot reach this mailbox any more. What is queued was authorised
+            before that and is still yours to send or discard &mdash; but you are deciding
+            about something composed by a client you have since cut off.
+          </p>
+        </section>
+      </div>
+      {{end}}
+
+      {{if .DraftID}}
+      <p class="prose mt-4">
+        This is a request to send a draft the client had already saved, so the message is in
+        the mailbox rather than here. Open it there to read or change it before you approve
+        &mdash; whatever the draft says when you press Approve is what goes out.
+        <span class="mono ms-1 break-all">{{.DraftID}}</span>
+      </p>
+      {{end}}
+
+      {{if or .To .Subject .Body}}
+      <div class="mt-4 grid gap-2">
+        <dl class="facts">
+          {{if .To}}
+          <dt>To</dt>
+          <dd>{{range .To}}<span class="badge mono" data-variant="outline">{{mailAddress .}}</span>{{end}}</dd>
+          {{end}}
+          {{if .Cc}}
+          <dt>Cc</dt>
+          <dd>{{range .Cc}}<span class="badge mono" data-variant="outline">{{mailAddress .}}</span>{{end}}</dd>
+          {{end}}
+          {{if .Subject}}
+          <dt>Subject</dt>
+          <dd><span class="font-medium wrap-anywhere">{{.Subject}}</span></dd>
+          {{end}}
+          {{if .Attachments}}
+          <dt>Attached</dt>
+          <dd>{{range .Attachments}}<span class="badge" data-variant="secondary">{{.}}</span>{{end}}</dd>
+          {{end}}
+        </dl>
+        {{if .Body}}
+        <p class="held-body">{{.Body}}</p>
+        {{end}}
+      </div>
+      {{end}}
+    </section>
+
+    {{/* Discard first and Approve at the far end, the same arrangement the widen page uses:
+         approving is the act that cannot be taken back, so a keyboard reaches the way out
+         before it reaches the decision. */}}
+    <footer class="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
+      <form method="post" action="/held/decline">
+        <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button class="btn" data-variant="outline">Discard</button>
+      </form>
+      <form method="post" action="/held/approve">
+        <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+        <input type="hidden" name="id" value="{{.ID}}">
+        <button class="btn" data-variant="destructive">Approve and {{.Act}}</button>
+      </form>
+    </footer>
+  </div>
+{{else}}
+  <div class="card">
+    <section class="empty py-6 text-sm text-muted-foreground">
+      Nothing is waiting. Actions appear here when a client whose grant is set to
+      <span class="mono">hold</span> tries to send, delete, write a filter or change a
+      vacation responder.
+    </section>
+  </div>
+{{end}}
+</div>
+
+{{if .Pending}}
+<p class="prose mt-6">
+  Approving carries the action out now, exactly as it was queued &mdash; the client is not
+  asked again and does not get to change it in between. Discarding throws it away; the client
+  is not told, and will find out the way it finds out about anything else, by looking.
+</p>
+<p class="prose mt-3">
+  Nothing here can happen twice. An action leaves this queue the moment you answer it, so a
+  second press, a resubmitted form or a second tab finds nothing waiting.
+</p>
+{{if .Retention}}
+<p class="prose mt-3">
+  A held send is kept whole while it waits &mdash; recipients, body and any attachments, in
+  this server's database and not encrypted. So it does not wait indefinitely: anything still
+  unanswered after {{.Retention}} expires, the message is discarded, and the line naming it
+  stays below. An expired action cannot be approved afterwards. Ask the client to compose it
+  again if it is still wanted.
+</p>
+{{end}}
+{{end}}
+
+{{if .Recent}}
+{{/* Actions that have left the queue, kept and out of the way. The payload is dropped when
+     one is answered — or when it expires unanswered, which is the same write and is why an
+     expired row is here rather than gone. What survives either way is the line it was listed
+     by and nothing of the message. */}}
+<details class="advanced mt-8">
+  <summary>{{if eq (len .Recent) 1}}1 closed action{{else}}{{len .Recent}} closed actions{{end}}</summary>
+  <div class="grid gap-2">
+    {{range .Recent}}
+    <div class="card" data-size="sm">
+      <section class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span class="font-medium wrap-anywhere">{{.Summary}}</span>
+        <span class="badge" data-variant="outline">{{.Resolution}}</span>
+        <span class="text-xs text-muted-foreground">
+          {{.Account}} &middot; {{.Grant}} &middot; {{.Resolved}}
+        </span>
+      </section>
+    </div>
+    {{end}}
+  </div>
+</details>
+{{end}}
+{{end}}

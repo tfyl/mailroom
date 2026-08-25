@@ -1,0 +1,24 @@
+# SHA-256 of the Tailwind standalone binaries the Makefile downloads. Taken from the
+# sha256sums.txt asset published alongside the release, and recorded here so the check reads a
+# value that came through review rather than a second fetch from the same host that just
+# served the binary — two downloads agreeing with each other prove nothing.
+#
+# Columns are version, artifact, hash. The version is a column rather than something the file
+# implies as a whole, because the Makefile looks a row up by it: bump TAILWIND_VERSION without
+# adding rows here and the build stops saying no checksum is recorded for that version, which
+# is a sentence that says what to do next. Left implicit, that same omission would arrive as a
+# hash mismatch — the wording reserved for a binary that is not the one this project expects,
+# which is not a thing to cry wolf about.
+#
+# To bump, replace every row below from:
+#   https://github.com/tailwindlabs/tailwindcss/releases/download/v<version>/sha256sums.txt
+#
+# Windows is absent because the download refuses any uname that is not Linux or Darwin long
+# before it reaches this file.
+
+4.3.3  tailwindcss-linux-arm64       55fd0b241214eff3de1e8ee4f22796662f2d2e7a49bcfca7477cfd0bac398195
+4.3.3  tailwindcss-linux-arm64-musl  71ea4be79c9de9827545682df3e040053fb535d37c71ed2cfdedf9385a0868e0
+4.3.3  tailwindcss-linux-x64         dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a
+4.3.3  tailwindcss-linux-x64-musl    a04d34ceacc8f52cbe8920ad846cdeb61d3d0021dba32db0d1f77c9d9fad7a6c
+4.3.3  tailwindcss-macos-arm64       cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d
+4.3.3  tailwindcss-macos-x64         7922e0953f2110c05976e3bf58f14e643d90427575e766b7d433f5f80cbee7e1

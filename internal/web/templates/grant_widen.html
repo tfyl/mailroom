@@ -1,0 +1,198 @@
+{{define "content"}}
+<h1>Widen {{.Grant.Label}}?</h1>
+<p class="lede">
+  This hands the client more than it was authorised for. The token it already holds is what
+  picks this up, on its next call, without anyone at that end approving anything &mdash; so the
+  decision is yours alone, and it is worth reading before you make it.
+</p>
+
+<div class="card" data-size="sm">
+  <section>
+    <h2 class="m-0 text-base font-semibold wrap-anywhere">
+      What {{.Grant.Label}} <span class="grant-id mono">#{{.Grant.ShortID}}</span> holds today
+    </h2>
+    <dl class="facts">
+      <dt>Reaches</dt>
+      <dd>
+        {{range .Grant.Accounts}}<span class="badge" data-variant="secondary">{{.}}</span>{{else}}<span class="text-muted-foreground">no mailboxes</span>{{end}}
+      </dd>
+      <dt>May</dt>
+      <dd>
+        {{range .Grant.Caps}}<span class="badge mono" data-variant="outline">{{.Name}}</span>{{else}}<span class="text-muted-foreground">nothing on its own</span>{{end}}
+      </dd>
+      {{if .Grant.Privileged}}
+      <dt>Privileged</dt>
+      <dd>
+        {{range .Grant.Privileged}}<span class="badge mono" data-variant="warning">{{.Name}}</span>{{end}}
+      </dd>
+      {{end}}
+      <dt>Acts</dt>
+      <dd>
+        <span class="badge mono" data-variant="{{if .Grant.Mode.Enforced}}success{{else}}outline{{end}}">{{.Grant.Mode.Name}}</span>
+        <span class="text-muted-foreground">{{.Grant.Mode.Title}}</span>
+      </dd>
+      {{if .Grant.ExpiresIn}}
+      <dt>Until</dt>
+      <dd><span class="text-muted-foreground">{{.Grant.ExpiresIn}}</span></dd>
+      {{end}}
+    </dl>
+  </section>
+</div>
+
+{{if or .Change.AddedAccounts .Change.AddedCaps .Change.ModeLoosens}}
+<h2>It gains</h2>
+{{/* The gains are the whole reason this page exists, so they are the loudest thing on it: an
+     itemised list, each line marked with what it is doing to the grant. Losses are shown too,
+     and quietly, because a loss needs no permission from anyone. */}}
+<div class="card change-gains">
+  <section>
+    <ul class="changes">
+      {{range .Change.AddedAccounts}}
+      <li>
+        <span class="change-mark" aria-hidden="true">+</span>
+        <span>
+          <strong class="font-medium wrap-anywhere">the mailbox {{.Alias}}</strong>
+          {{if .Address}}<span class="mono ms-1 break-all text-muted-foreground">{{mailAddress .Address}}</span>{{end}}
+          <span class="mt-1 block text-sm text-muted-foreground">
+            Everything this grant may do, it may now do here.
+          </span>
+        </span>
+      </li>
+      {{end}}
+      {{range .Change.AddedCaps}}
+      <li>
+        <span class="change-mark" aria-hidden="true">+</span>
+        <span>
+          <strong class="mono font-medium">{{.Name}}</strong>
+          {{if .Privileged}}<span class="badge ms-1" data-variant="warning">privileged</span>{{end}}
+          <span class="mt-1 block text-sm text-muted-foreground">{{.Description}}</span>
+        </span>
+      </li>
+      {{end}}
+      {{/* A loosened mode is filed with what the grant gains, because that is what it is: no
+           capability changes hands, and the client acquires the freedom to use the ones it
+           already holds without anybody agreeing to each use. Coming off `hold` is the one
+           that matters most, and it is the one this page has to say plainly. */}}
+      {{if .Change.ModeLoosens}}
+      <li>
+        <span class="change-mark" aria-hidden="true">+</span>
+        <span>
+          <strong class="mono font-medium">{{.Change.ModeTo.Name}}</strong>
+          <span class="ms-1">&mdash; {{.Change.ModeTo.Title}}</span>
+          {{if not .Change.ModeTo.Enforced}}<span class="badge ms-1" data-variant="warning">not enforced</span>{{end}}
+          <span class="mt-1 block text-sm text-muted-foreground">
+            {{.Change.ModeTo.Summary}} It is set to
+            <span class="mono">{{.Change.ModeFrom.Name}}</span> today.
+          </span>
+        </span>
+      </li>
+      {{end}}
+    </ul>
+  </section>
+</div>
+{{end}}
+
+{{if or .Change.RemovedAccounts .Change.RemovedCaps (and .Change.ModeChanged (not .Change.ModeLoosens))}}
+<h2>It loses</h2>
+<div class="card" data-size="sm">
+  <section>
+    <ul class="changes">
+      {{range .Change.RemovedAccounts}}
+      <li>
+        <span class="change-mark" aria-hidden="true">&minus;</span>
+        <span>
+          <strong class="font-medium wrap-anywhere">the mailbox {{.Alias}}</strong>
+          {{if .Address}}<span class="mono ms-1 break-all text-muted-foreground">{{mailAddress .Address}}</span>{{end}}
+        </span>
+      </li>
+      {{end}}
+      {{range .Change.RemovedCaps}}
+      <li>
+        <span class="change-mark" aria-hidden="true">&minus;</span>
+        <span>
+          <strong class="mono font-medium">{{.Name}}</strong>
+          <span class="ms-1 text-sm text-muted-foreground">{{.Description}}</span>
+        </span>
+      </li>
+      {{end}}
+      {{if and .Change.ModeChanged (not .Change.ModeLoosens)}}
+      <li>
+        <span class="change-mark" aria-hidden="true">&minus;</span>
+        <span>
+          <strong class="mono font-medium">{{.Change.ModeFrom.Name}}</strong>
+          <span class="ms-1 text-sm text-muted-foreground">
+            It will be set to <span class="mono">{{.Change.ModeTo.Name}}</span> instead.
+            {{.Change.ModeTo.Summary}}
+          </span>
+        </span>
+      </li>
+      {{end}}
+    </ul>
+  </section>
+</div>
+{{end}}
+
+{{if .Change.Expiry}}
+<h2>Its expiry</h2>
+<div class="card" data-size="sm">
+  <section class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+    <span>{{.Change.Expiry}}</span>
+    {{if .Change.ExpiryWidens}}<span class="badge" data-variant="warning">longer</span>
+    {{else}}<span class="badge" data-variant="outline">shorter</span>{{end}}
+  </section>
+</div>
+{{end}}
+
+{{if and .Change.ModeLoosens (eq .Change.ModeFrom.Name "hold")}}
+{{/* The one thing an operator coming off `hold` is likely to assume wrongly. Nothing already
+     queued is released by this: each waiting action still has to be answered on the Held
+     page, one at a time. What changes is that the next call does not join them. */}}
+<div class="alert mt-8" data-variant="warning">
+  {{template "iconAlert"}}
+  <strong>This stops holding what comes next. It does not release what is already waiting.</strong>
+  <section>
+    <p>
+      Anything on the Held page stays there and still has to be approved or discarded one at a
+      time. From the client&rsquo;s next call onwards, sending, deleting, filters and the
+      vacation responder happen when it asks for them &mdash; there is nothing further for you
+      to press.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{if .Change.Irreversible}}
+<div class="alert mt-8" data-variant="destructive">
+  {{template "iconAlert"}}
+  <strong>{{.Change.IrreversibleWords}} cannot be taken back.</strong>
+  <section>
+    <p>
+      These are the permissions whose effects outlive the permission. Removing one later reaches
+      nothing already done under it: mail that has been sent stays sent, mail that has been
+      deleted stays deleted, and a draft that has been discarded is not coming back. Everything
+      else on this page you can undo by editing the grant again.
+    </p>
+  </section>
+</div>
+{{end}}
+
+{{/* The two ways out come first, and the button that hands the access over sits at the far
+     end of the row on its own. Nothing here is one slip away from anything else, and a
+     keyboard reaches the escapes before it reaches the decision. */}}
+<div class="decision">
+  <div class="flex flex-wrap items-center gap-3">
+    <a class="btn" data-variant="outline" href="/grants/edit?id={{.Grant.ID}}">Go back and change it</a>
+    <a class="btn" data-variant="outline" href="/grants">Leave it alone</a>
+  </div>
+  <form method="post" action="/grants/edit">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="id" value="{{.Grant.ID}}">
+    {{range .Accounts}}<input type="hidden" name="accounts" value="{{.}}">{{end}}
+    {{range .Capabilities}}<input type="hidden" name="capabilities" value="{{.}}">{{end}}
+    <input type="hidden" name="mode" value="{{.Mode}}">
+    <input type="hidden" name="expires_days" value="{{.ExpiresDays}}">
+    <input type="hidden" name="confirm" value="yes">
+    <button class="btn" data-variant="destructive" data-size="lg">{{.Change.ConfirmLabel}}</button>
+  </form>
+</div>
+{{end}}

@@ -48,6 +48,10 @@ redirect-mismatch errors at the provider.
 | `MAILROOM_SIGNUPS` | `closed` | Who may create an account. See [Signups](#signups). |
 | `MAILROOM_LOG_LEVEL` | `info` | |
 | `MAILROOM_SEND_RATE_LIMIT` | `20/hour` | Per grant. |
+| `MAILROOM_REGISTER_RATE_LIMIT` | `20/hour` | Client registrations per client address. `off` to disable. See [Bounding client registration](#bounding-client-registration). |
+| `MAILROOM_REGISTER_INSTANCE_LIMIT` | `200/hour` | Client registrations across the whole instance. `off` to disable. |
+| `MAILROOM_CLIENT_TTL` | `168h` | How long a client registration that never became a grant is kept. `24h` to `8760h`, or `off`. |
+| `MAILROOM_TRUSTED_PROXIES` | — | CIDR list of sources that may speak for somebody else. Required for `forward`; read whatever the login method is. |
 | `MAILROOM_HELD_TTL` | `72h` | How long an action queued by a grant in `hold` mode waits before it is discarded. `5m` to `720h`, or `off`. See [Held actions](grants.md#how-long-a-held-action-waits). |
 | `MAILROOM_ATTACHMENT_DIR` | beside `MAILROOM_DB` | Where attachment bytes are staged. See [Attachments](#attachments). |
 | `MAILROOM_ATTACHMENT_TTL` | `15m` | How long staged bytes live, and how long a link lasts. Max `24h`. |
@@ -450,7 +454,7 @@ MAILROOM_TRUSTED_PROXIES=10.0.0.0/8
 | Variable | Notes |
 |---|---|
 | `MAILROOM_FORWARD_HEADER` | Defaults to `X-Forwarded-Email` |
-| `MAILROOM_TRUSTED_PROXIES` | Required. CIDR list. |
+| `MAILROOM_TRUSTED_PROXIES` | Required here. The same list [client registration](#bounding-client-registration) is bounded by. |
 
 > **The header is only as trustworthy as the network.** Anyone who can reach the port directly
 > can forge it. mailroom refuses to start if `MAILROOM_TRUSTED_PROXIES` is empty, and rejects
@@ -677,6 +681,66 @@ accounts, grants and audit pages — stays behind your proxy.
 This is the single most common way a self-hosted remote MCP server ends up either broken or
 accidentally open. Bypassing too little breaks clients; bypassing everything exposes your
 admin UI.
+
+## Bounding client registration
+
+`POST /register` is RFC 7591 dynamic client registration, and it is unauthenticated on purpose:
+an MCP client has to be able to introduce itself before any human has seen it, which is why it
+is on the bypass list above. Registering grants nothing — every capability still comes from a
+consent screen somebody approves — but each call writes a row.
+
+Two limits bound the endpoint and a reclaimer takes back what gets past them. All three are on
+by default:
+
+```sh
+MAILROOM_REGISTER_RATE_LIMIT=20/hour      # per client address
+MAILROOM_REGISTER_INSTANCE_LIMIT=200/hour # across the whole instance
+MAILROOM_CLIENT_TTL=168h                  # registrations that never became a grant
+```
+
+The per-address limit is the one that keeps an instance usable while one noisy client is
+refused; the instance limit is the one a botnet cannot spread its way around. A refusal is
+`429` with an OAuth `temporarily_unavailable` error, identical for both, and it names neither.
+
+**What it takes to hit them.** Twenty registrations from one address in an hour is an MCP
+client reconnecting every three minutes for a solid hour. Two hundred across the instance is
+more first-time clients in one hour than most self-hosted deployments see in a year. Setting
+up a new client, or setting one up again after a reinstall, is one registration. If you are
+genuinely running into either, raise them — they are counts per window, spelled like
+`MAILROOM_SEND_RATE_LIMIT`, and `off` switches one off entirely.
+
+### Which address a caller is counted as
+
+**By `MAILROOM_TRUSTED_PROXIES`, and nothing else.** The address a request is attributed to is
+the one that opened the connection, unless that address is on the trusted list — in which case
+it is the rightmost address in `X-Forwarded-For` that is not itself on the list. A caller that
+is not a configured proxy may send whatever header it likes and is still counted as itself.
+
+That variable used to be read only under `MAILROOM_AUTH_PROVIDERS=forward`. It is now read
+whatever the login method is, and it is worth setting for any deployment with something in
+front of it:
+
+```sh
+# cloudflared or a reverse proxy on the same host
+MAILROOM_TRUSTED_PROXIES=127.0.0.1/32
+```
+
+Leaving it empty is safe but blunt. Nothing forwarded is believed from anybody, so behind a
+proxy **every caller is attributed to the proxy** and the per-address limit becomes a second,
+tighter instance-wide one. The startup line reports what is in force — `trusted_proxies`,
+`register_limit`, `register_instance_limit` — so you can check which case you are in.
+
+### Reclaiming registrations nobody approved
+
+A rate limit bounds how fast the `clients` table grows, not how large it gets. A registration
+that no grant references was never approved by anybody, so `MAILROOM_CLIENT_TTL` deletes those
+older than it, hourly. A registration that became a grant is kept for good, including one
+whose grant was later revoked or taken off the grants page.
+
+Seven days is far past any live flow: an authorization request expires ten minutes after the
+consent screen is rendered, so a client that has not been approved within a week is one that
+never will be. A client whose registration is reclaimed and which then tries to authorize is
+told its `client_id` is unknown, and registers again. `off` keeps every row forever.
 
 ## Attachments
 

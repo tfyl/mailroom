@@ -232,7 +232,22 @@ func run() error {
 		WithSendLimit(db, cfg.SendCap.Count, cfg.SendCap.Window).
 		WithHoldQueue(holds, cfg.PublicURL.String())
 
-	oauthServer := oauthsrv.New(db, cfg.PublicURL.String())
+	// The same list forward-auth reads an identity header from. Parsed once here so a bad
+	// entry is a startup error rather than a silently ignored line — and parsed even when
+	// forward-auth is not configured, because the registration bound needs it either way.
+	proxies, err := auth.ParseTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
+		return fmt.Errorf("MAILROOM_TRUSTED_PROXIES: %w", err)
+	}
+
+	oauthServer := oauthsrv.New(db, cfg.PublicURL.String()).
+		WithRegistrationLimit(proxies,
+			cfg.RegisterCap.Count, cfg.RegisterCap.Window,
+			cfg.RegisterInstanceCap.Count, cfg.RegisterInstanceCap.Window)
+	// The third sweeper, and the one with the least at stake: a client registration that
+	// never became a grant holds nobody's mail. It is here because the endpoint that writes
+	// those rows is the only one on this server a stranger can reach.
+	go oauthServer.SweepClientsEvery(ctx, oauthsrv.ClientSweepInterval, cfg.ClientTTL, log)
 	mcpServer := mcp.NewServer(oauthServer, tools, cfg.PublicURL.String(), log)
 
 	ui, err := web.New(db, providers, sealer, operator, holds, cfg.Signups, cfg.PublicURL.String(), log)
@@ -271,6 +286,16 @@ func run() error {
 		"mcp_endpoint", cfg.URL("/mcp"),
 		"attachment_dir", cfg.Attachments.Dir,
 		"attachment_ttl", cfg.Attachments.TTL,
+		// Logged rather than warned about. Whether an empty trusted-proxy list is wrong
+		// depends on something this process cannot see — whether anything is in front of it
+		// — so the honest thing is to say what the bound is keyed on and let the operator
+		// recognise their own deployment. Empty behind a proxy means every caller is
+		// attributed to the proxy, and the per-address limit becomes a second instance-wide
+		// one; see docs/deploying.md.
+		"trusted_proxies", len(cfg.TrustedProxies),
+		"register_limit", describeRate(cfg.RegisterCap),
+		"register_instance_limit", describeRate(cfg.RegisterInstanceCap),
+		"client_ttl", cfg.ClientTTL,
 	)
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -348,6 +373,15 @@ func buildOperatorAuth(ctx context.Context, cfg *config.Config) (*auth.Registry,
 		return nil, err
 	}
 	return registry, nil
+}
+
+// describeRate renders a configured bound for the startup line, so an operator can read what
+// is actually in force rather than what they believe they set.
+func describeRate(r config.RateLimit) string {
+	if r.Count <= 0 {
+		return "off"
+	}
+	return fmt.Sprintf("%d per %s", r.Count, r.Window)
 }
 
 func parseLevel(s string) slog.Level {

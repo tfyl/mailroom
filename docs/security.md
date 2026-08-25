@@ -218,6 +218,53 @@ mailroom refuses to start when `MAILROOM_TRUSTED_PROXIES` is empty and rejects t
 from any source outside that list. Bind to a private interface as well — the CIDR check is a
 second line, not the only one.
 
+## The bound on open registration
+
+`POST /register` is unauthenticated by design and stays that way: RFC 7591 dynamic client
+registration is how an MCP client introduces itself before any human has seen it, and it is on
+the list of paths that must bypass a proxy's login. Registering confers nothing. Every
+capability comes from a consent screen an operator approves, so an open registration endpoint
+is not an open door — it is an open pen.
+
+What it lacked was a bound. The body was capped at 64 KiB and the number of rows at nothing, so
+anybody who could reach the URL could write to the `clients` table as fast as they could post.
+`POST /token` now carries the same 64 KiB cap, which it had been taking from `net/http`'s 10 MB
+default.
+
+Three things bound it now, all on by default:
+
+- **Per client address**, `MAILROOM_REGISTER_RATE_LIMIT`, 20 an hour.
+- **Across the instance**, `MAILROOM_REGISTER_INSTANCE_LIMIT`, 200 an hour. A per-address limit
+  is exactly what a botnet is for; this is the number that does not move when the addresses do.
+- **A reclaimer**, `MAILROOM_CLIENT_TTL`, seven days. A rate limit bounds the slope and not the
+  total, and a registration no grant references was never approved by anybody.
+
+The client address is established by `MAILROOM_TRUSTED_PROXIES` — the same list forward-auth
+reads its identity header from, deliberately the same one rather than a second notion of who
+may speak for somebody else. A request is attributed to the address that opened the connection
+unless that address is a configured proxy, in which case it is the rightmost address in
+`X-Forwarded-For` that is not one. Reading from the right is what makes it unspoofable: a proxy
+appends the address it observed, so anything a caller wrote itself is to the left of that and
+is never reached. With the list empty nothing forwarded is believed at all, which is blunt
+rather than dangerous — behind a proxy every caller is then attributed to the proxy. IPv6 is
+counted by `/64`, because a single IPv6 address is not a scarce thing to hold.
+
+A refusal is one refusal. Both limits answer `429` with the same `temporarily_unavailable`
+error and the same description, and there is no `Retry-After`, so nothing in the response says
+which of the two was reached — the same reasoning that makes an unknown, spent, revoked and
+expired invite one indistinguishable answer. Telling a caller it personally is over its
+allowance, rather than that the instance is full, tells it whether spreading across more
+addresses is worth doing.
+
+**What this does not do.** It raises the cost of abusing the endpoint; it does not make the
+endpoint unabusable. A distributed flood still spends the instance's hourly allowance and,
+while it does, an honest client trying to register is refused along with it — that is what an
+instance-wide ceiling is, and the alternative is not having one. Nothing here is a defence
+against a plain HTTP flood, which is a job for whatever is in front of this server. And the
+consent screen is unchanged: registering was never the dangerous half, and a client that
+registers honestly and asks for everything is still refused by a human reading the page rather
+than by any of this.
+
 ## Audit
 
 Every tool call writes a row: grant, account, tool, outcome, timestamp, the capability it
@@ -322,6 +369,9 @@ Worth being honest about the boundaries:
 - **A link that has already been fetched.** Revoking a grant stops the next fetch; it does not
   reach a copy an agent has already pulled down. The window is minutes by design, and it is a
   window.
+- **Volume at an open endpoint.** Client registration is bounded rather than closed, and a
+  bound raises a cost rather than removing an ability. See [the bound on open
+  registration](#the-bound-on-open-registration) for what it does and does not reach.
 
 ## Reporting a vulnerability
 

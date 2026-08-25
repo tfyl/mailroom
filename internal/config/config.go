@@ -53,6 +53,22 @@ type Config struct {
 	// so how long the message it holds sits on disk. Zero disables expiry, which is what an
 	// instance that would rather lose nothing than lose mail asks for explicitly.
 	HeldTTL time.Duration
+
+	// TrustedProxies is which source addresses may speak for somebody else, as CIDRs or bare
+	// addresses. Read once and used by everything that has to attribute a request to a caller
+	// rather than to the connection: forward-auth for the identity header, and the bound on
+	// unauthenticated client registration for the client address. Forward-auth additionally
+	// refuses to start when this is empty, because there the list is the entire control.
+	TrustedProxies []string
+
+	// RegisterCap and RegisterInstanceCap bound POST /register, which is the one endpoint a
+	// stranger can make write a database row. Per client address and across the instance
+	// respectively; a zero count leaves that half unenforced.
+	RegisterCap         RateLimit
+	RegisterInstanceCap RateLimit
+	// ClientTTL is how long a client registration that never became a grant is kept. Zero
+	// keeps them forever, which leaves the clients table growing with nothing to reclaim it.
+	ClientTTL time.Duration
 }
 
 // AttachmentConfig governs the blob store that keeps attachment bytes out of the MCP
@@ -180,6 +196,14 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Read here rather than inside forwardAuth, so that one list means one thing whichever
+	// login method is configured. It used to be read only when forward-auth was selected,
+	// which was fine while forward-auth was the only thing asking who a caller is.
+	c.TrustedProxies = splitList(os.Getenv("MAILROOM_TRUSTED_PROXIES"))
+	if err := c.loadRegistrationBound(); err != nil {
+		return nil, err
+	}
+
 	if err := c.loadAttachments(); err != nil {
 		return nil, err
 	}
@@ -249,6 +273,111 @@ func (c *Config) loadHeldTTL() error {
 	}
 	c.HeldTTL = ttl
 	return nil
+}
+
+// The bound on unauthenticated client registration, and the range an operator may move it in.
+//
+// These default to a value rather than to nothing, which is the exception to this project's
+// rule that a new knob stays inert until set — the same exception MAILROOM_HELD_TTL is. The
+// rule exists so that adding a setting cannot change what an existing deployment does, and it
+// is the right rule for a knob that expresses a preference. This one is not a preference.
+// Every instance in existence has an open endpoint that writes a row per call, the deployments
+// most exposed to it are the ones nobody is reading release notes for, and a bound that has to
+// be configured before it bounds anything is a bound that is not there.
+//
+// The numbers are chosen to be invisible. Twenty registrations an hour from one address is a
+// client reconnecting every three minutes for an hour; two hundred across the instance is a
+// self-hosted mail server seeing more first-time MCP clients in an hour than most see in a
+// year. A default nobody can reach is what makes defaulting it on defensible: the argument for
+// inert-until-set is that a default might refuse somebody's honest traffic, and the answer to
+// that is a number no honest traffic reaches, not an unbounded endpoint.
+//
+// A day's floor and a year's ceiling on the client TTL, for the reason the held queue has its
+// own: below the floor the reclaimer is racing an operator who has walked away from a consent
+// screen, and above the ceiling it has stopped being a bound.
+const (
+	defaultRegisterCap         = "20/hour"
+	defaultRegisterInstanceCap = "200/hour"
+	defaultClientTTL           = 7 * 24 * time.Hour
+	minClientTTL               = 24 * time.Hour
+	maxClientTTL               = 365 * 24 * time.Hour
+)
+
+// loadRegistrationBound reads what POST /register will absorb, and how long what it wrote is
+// kept.
+func (c *Config) loadRegistrationBound() error {
+	var err error
+	c.RegisterCap, err = optionalRateLimit("MAILROOM_REGISTER_RATE_LIMIT", defaultRegisterCap)
+	if err != nil {
+		return err
+	}
+	c.RegisterInstanceCap, err = optionalRateLimit("MAILROOM_REGISTER_INSTANCE_LIMIT", defaultRegisterInstanceCap)
+	if err != nil {
+		return err
+	}
+
+	if c.RegisterCap.Count == 0 && c.RegisterInstanceCap.Count == 0 {
+		c.Warnings = append(c.Warnings, "both registration limits are off, so POST /register "+
+			"is unbounded: it needs no credential, and every call writes a row nothing "+
+			"reclaims until MAILROOM_CLIENT_TTL comes round")
+	}
+	// A per-address allowance larger than the whole instance's is one that can never be
+	// reached, which reads as a limit and is not one.
+	if c.RegisterCap.Count > 0 && c.RegisterInstanceCap.Count > 0 &&
+		perSecond(c.RegisterCap) > perSecond(c.RegisterInstanceCap) {
+		c.Warnings = append(c.Warnings, "MAILROOM_REGISTER_RATE_LIMIT allows one address more "+
+			"registrations than MAILROOM_REGISTER_INSTANCE_LIMIT allows the whole instance, "+
+			"so the per-address limit can never be the one that refuses anything")
+	}
+
+	return c.loadClientTTL()
+}
+
+// loadClientTTL reads how long a registration nobody ever approved is kept.
+func (c *Config) loadClientTTL() error {
+	raw := os.Getenv("MAILROOM_CLIENT_TTL")
+	switch {
+	case raw == "0" || strings.EqualFold(raw, "off") || strings.EqualFold(raw, "never"):
+		c.ClientTTL = 0
+		c.Warnings = append(c.Warnings, "MAILROOM_CLIENT_TTL is off, so a client registration "+
+			"that never became a grant is kept forever. The registration limit bounds how "+
+			"fast that table grows; nothing then bounds how large it gets")
+		return nil
+	case raw == "":
+		c.ClientTTL = defaultClientTTL
+		return nil
+	}
+
+	ttl, err := time.ParseDuration(raw)
+	if err != nil {
+		return fmt.Errorf("MAILROOM_CLIENT_TTL must be a duration such as 168h, or `off`, got %q", raw)
+	}
+	if ttl < minClientTTL || ttl > maxClientTTL {
+		return fmt.Errorf("MAILROOM_CLIENT_TTL must be between %s and %s, or `off`; it is how "+
+			"long a client registration nobody ever approved is kept", minClientTTL, maxClientTTL)
+	}
+	c.ClientTTL = ttl
+	return nil
+}
+
+// perSecond renders a rate as one comparable number, so two written in different units can be
+// compared without either being rewritten.
+func perSecond(r RateLimit) float64 { return float64(r.Count) / r.Window.Seconds() }
+
+// optionalRateLimit reads a rate that may be switched off entirely.
+//
+// `off` is spelled by somebody who meant it, like MAILROOM_HELD_TTL's. It is not the same as
+// unset: unset takes the default, which is the whole point of having one.
+func optionalRateLimit(name, fallback string) (RateLimit, error) {
+	raw := envOr(name, fallback)
+	if raw == "0" || strings.EqualFold(raw, "off") || strings.EqualFold(raw, "never") {
+		return RateLimit{}, nil
+	}
+	limit, err := parseRateLimit(raw)
+	if err != nil {
+		return RateLimit{}, fmt.Errorf("%s: %w", name, err)
+	}
+	return limit, nil
 }
 
 // maxAttachmentTTL is the longest an operator may keep attachment copies.
@@ -491,7 +620,7 @@ func defaultLabel(slug string) string {
 func (c *Config) forwardAuth() (*ForwardAuth, error) {
 	f := &ForwardAuth{
 		Header:         envOr("MAILROOM_FORWARD_HEADER", "X-Forwarded-Email"),
-		TrustedProxies: splitList(os.Getenv("MAILROOM_TRUSTED_PROXIES")),
+		TrustedProxies: c.TrustedProxies,
 		RequiredGroup:  os.Getenv("MAILROOM_FORWARD_REQUIRED_GROUP"),
 	}
 	// A trusted identity header is trivially forgeable by anyone who can reach the port

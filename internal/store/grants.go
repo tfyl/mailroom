@@ -50,6 +50,29 @@ func (s *Store) Client(ctx context.Context, id string) (Client, error) {
 	return c, nil
 }
 
+// DeleteUnusedClients removes registrations created before a cutoff that no grant names.
+//
+// A registration on its own confers nothing — that is the whole reason the endpoint can be
+// open — so a row no grant references is a row that never became anything. It is also the
+// only rate limit's residue: a bound on how fast the table grows is not a bound on how large
+// it gets, and something has to take the difference back.
+//
+// The predicate is exact rather than approximate. A grant is never deleted, only marked, so
+// `NOT EXISTS` over grants is the same question as "was this client ever approved" and
+// includes clients whose grants were revoked and taken off the page. It is also what keeps
+// the foreign key from grants.client_id satisfied: nothing this removes is pointed at.
+func (s *Store) DeleteUnusedClients(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM clients
+		 WHERE created_at < ?
+		   AND NOT EXISTS (SELECT 1 FROM grants WHERE grants.client_id = clients.id)`,
+		unix(before))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // --- Grants ---
 
 // CreateGrant records an approved grant.

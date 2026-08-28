@@ -146,7 +146,13 @@ magic string that widens as new mailboxes are linked is a footgun.
                  "message": "provider throttled; retry after 30s" }
   },
   "cursor": "eyJ3b3JrIjoi…",              // omitted when nothing remains
-  "complete": false
+  "complete": false,
+  "truncated": {                          // present only when complete is false
+    "note": "These are the 25 newest matches, not all of them. …",
+    "returned": 25,
+    "covers_back_to": "2026-01-17T19:06:16Z",
+    "covers_up_to": "2026-08-28T14:04:27Z"
+  }
 }
 ```
 
@@ -154,6 +160,21 @@ magic string that widens as new mailboxes are linked is a footgun.
 from three healthy ones. But the failure must be *visible*: the `accounts` block reports every
 account the call touched, and a model that cannot distinguish "no matching mail" from "that
 mailbox was unreachable" will confidently tell the user the wrong thing.
+
+**A truncated page is not an answer.** Results are newest first and stop at `limit`, so a
+capped result describes a window rather than a mailbox — and the two readings come apart
+exactly when the mail being looked for is old. `complete: false` has always said so, but as a
+boolean underneath fifty rows it states a fact about pagination, and pagination is not the
+mistake worth preventing. The mistake is reading the page as the whole result and reporting
+that nothing older matched, which is wrong in the one direction that costs something: mail
+that was never examined looks identical to mail that does not exist.
+
+So the window is named. `covers_back_to` is the oldest row returned, and it turns "there are
+more results" into "everything before this date is unexamined" — the sentence a caller has to
+read before it can wonder whether what it is hunting for sits on the far side of it. The block
+is absent when `complete` is true, so its presence always means something, and absent when an
+incomplete result carried no rows at all: that search was cut short by a mailbox that failed
+rather than by the limit, and the `accounts` block is where that is already explained.
 
 If *every* account fails, the call returns an error rather than an empty success.
 

@@ -111,7 +111,13 @@ func (t *Tools) Register(srv *mcp.Server, g *grant.Grant) {
 	if g.Caps.Has(mail.CapRead) {
 		mcp.AddTool(srv, tool("mail_search",
 			"Search mail across one or more mailboxes, newest first. Returns a "+
-				"per-account status block; check it before concluding that no mail matched."),
+				"per-account status block; check it before concluding that no mail matched. "+
+				"Results stop at the limit, so `complete: false` means you are holding the "+
+				"newest page and not the answer: the accompanying `truncated` block names the "+
+				"oldest date reached, and anything older went unexamined. Never report that a "+
+				"message does not exist from a result like that — follow `cursor`, raise "+
+				"`limit`, or bound the query by date first. An old message is exactly what a "+
+				"newest-first page hides."),
 			t.handleSearch)
 
 		mcp.AddTool(srv, tool("mail_get_message",
@@ -401,12 +407,22 @@ func (t *Tools) handleSearch(ctx context.Context, _ *mcp.CallToolRequest, args s
 		return errorWithDetail("every mailbox failed", map[string]any{"accounts": res.Accounts}), nil, nil
 	}
 
-	return result(map[string]any{
+	payload := map[string]any{
 		"results":  summarize(res.Items, accounts),
 		"accounts": res.Accounts,
 		"cursor":   res.Cursor,
 		"complete": res.Complete,
-	})
+	}
+
+	// Attached only to a result that stopped short, so its presence always means something;
+	// truncation() carries why a bare `complete: false` was not enough on its own.
+	if !res.Complete {
+		if window := truncation(res.Items); window != nil {
+			payload["truncated"] = window
+		}
+	}
+
+	return result(payload)
 }
 
 // --- single-message tools ---

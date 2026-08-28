@@ -201,7 +201,7 @@ func summarize(messages []mail.Message, accounts []mail.Account) []map[string]an
 			"account_address": addresses[m.ID.Account],
 			"from":            m.From.String(),
 			"subject":         m.Subject,
-			"date":            m.Date.Format("2006-01-02T15:04:05Z07:00"),
+			"date":            m.Date.Format(time.RFC3339),
 			"snippet":         m.Snippet,
 			"unread":          !m.Flags.Read,
 			"starred":         m.Flags.Starred,
@@ -240,7 +240,7 @@ func fullMessage(m mail.Message, acct mail.Account) map[string]any {
 		"to":              addresses(m.To),
 		"cc":              addresses(m.Cc),
 		"subject":         m.Subject,
-		"date":            m.Date.Format("2006-01-02T15:04:05Z07:00"),
+		"date":            m.Date.Format(time.RFC3339),
 		"unread":          !m.Flags.Read,
 		"starred":         m.Flags.Starred,
 		"body":            body,
@@ -270,5 +270,56 @@ func errorWithDetail(message string, detail map[string]any) *mcp.CallToolResult 
 	return &mcp.CallToolResult{
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: string(body)}},
+	}
+}
+
+// truncation describes the window a cut-short search actually covered.
+//
+// A search returns the newest matches up to the limit and then stops, so a result that hit
+// that limit is a page and not an answer. The envelope already said as much — `complete` is
+// false and a cursor is attached — but a bare false sitting underneath fifty rows states a
+// fact about pagination, and pagination is not the mistake worth preventing here. The
+// mistake is reading the page as the whole result and reporting that nothing older matched,
+// and it is wrong in the one direction that costs something: mail that was never examined
+// looks exactly like mail that does not exist.
+//
+// So the window gets named. The oldest row returned is the edge of what was seen, and saying
+// that date turns "there are more results" into "everything before this date is unexamined",
+// which is the sentence a caller has to read in order to wonder whether what it is hunting
+// for sits on the far side of it. Naming the newest row too is what makes the pair legible
+// as a window rather than as a single stray timestamp.
+//
+// Returns nil when there is nothing to describe. An incomplete result with no rows in it was
+// cut short by a mailbox that failed rather than by the limit, and the per-account status
+// block is where that is already explained; a window spanning no messages would be an
+// invented one.
+func truncation(messages []mail.Message) map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	// Computed rather than read off the ends. The merge does hand these back newest first,
+	// but a window that is only correct while that holds is one ordering change away from
+	// quietly naming the wrong date, and a wrong date here is worse than none: it would
+	// state that mail was examined when it was not.
+	oldest, newest := messages[0].Date, messages[0].Date
+	for _, m := range messages[1:] {
+		if m.Date.Before(oldest) {
+			oldest = m.Date
+		}
+		if m.Date.After(newest) {
+			newest = m.Date
+		}
+	}
+
+	return map[string]any{
+		"note": fmt.Sprintf("These are the %d newest matches, not all of them. Mail older than "+
+			"`covers_back_to` was not examined, so a message outside that window is missing from "+
+			"these results in exactly the way it would be if it did not exist. This result cannot "+
+			"show that something is absent. Before reporting that nothing matched, continue with "+
+			"`cursor`, raise `limit`, or bound the query by date.", len(messages)),
+		"returned":       len(messages),
+		"covers_back_to": oldest.Format(time.RFC3339),
+		"covers_up_to":   newest.Format(time.RFC3339),
 	}
 }

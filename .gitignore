@@ -51,3 +51,9 @@ crash.log
 # Downloaded build tools. The Tailwind standalone binary is over a hundred megabytes and
 # `make css` fetches it on demand; nothing here belongs in the history.
 /.tools/
+
+# The UI review set's generated half. `make ui-shots` rebuilds pages/ and narrow/ from the
+# templates in one command, so committing 160 PNGs bought a bigger clone and nothing else.
+# The contact sheets, before/ and fixes/ stay tracked: no command can put those back.
+/docs/ui/screenshots/pages/
+/docs/ui/screenshots/narrow/

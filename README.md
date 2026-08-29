@@ -197,7 +197,7 @@ These are generated, not collected: `node scripts/readme-shots.mjs` renders each
 through the server's own template path, frames it with `scripts/readme-shots.css`, and
 screenshots the result — so a change to the UI is one command away from being a change to the
 pictures. Every state of every page, light and dark, including the ones nobody would put in a
-README, is in [docs/ui/screenshots](docs/ui/screenshots).
+README, is one `make ui-shots` away in [docs/ui/screenshots](docs/ui/screenshots).
 
 ## Quickstart
 

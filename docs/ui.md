@@ -220,19 +220,24 @@ still looks ticked and has no tick. `theme.css` says so at the point it would be
 
 ## What it looks like
 
-Every page in every state it can be in, light and dark, lives in
-[`ui/screenshots/`](ui/screenshots):
+Every page in every state it can be in, light and dark, is a `make ui-shots` away. What is
+committed under [`ui/screenshots/`](ui/screenshots) is the part that one command cannot put
+back:
 
 - [`contact-sheet-light.png`](ui/screenshots/contact-sheet-light.png) and
   [`contact-sheet-dark.png`](ui/screenshots/contact-sheet-dark.png) — the whole product on one
   page, grouped by section. This is the one to open when the question is whether a change fits
   the rest of the UI, because the failure mode this design system actually has is a page that
   is coherent on its own and belongs to nothing.
-- [`pages/`](ui/screenshots/pages) — one render per state per theme, at 1180 px, named
-  `<state>-<theme>.png`.
-- [`narrow/`](ui/screenshots/narrow) — the same pages at 420 px, where the layouts break.
 - [`before/`](ui/screenshots/before) — the pages before the ergonomics pass that produced the
   current ones, kept as the comparison that change is argued from, not as a target.
+- [`fixes/`](ui/screenshots/fixes) — annotated one-off shots of particular defects.
+
+The per-state renders sit beside them and are ignored by git, because keeping 160 generated
+PNGs in the history buys nothing that `make ui-shots` does not: `pages/`, one render per state
+per theme at 1180 px named `<state>-<theme>.png`, and `narrow/`, the same pages at 420 px where
+the layouts break. The prose below names files in `pages/`; run the command once and they are
+all there.
 
 They are generated rather than collected, so they can be regenerated after a change instead of
 drifting out of date one page at a time:
@@ -274,7 +279,7 @@ not claim fails the run rather than being quietly left off, because the sheet's 
 that it is everything. **A state that is not in `shots_test.go` is a state nobody has looked
 at**, which is how `invites.html` spent a release rendering entirely unstyled.
 
-![The mailboxes page](ui/screenshots/pages/accounts-light.png)
+![The mailboxes page](images/mailboxes-light.png)
 
 The held queue — `pages/held-light.png` and its dark twin — is the other page worth opening,
 because it is the only screen in the product where pressing a button sends somebody's mail.
@@ -292,7 +297,7 @@ the page as served, `pages/consent-privileged-light.png` is the same page with t
 capabilities ticked — the rows tint without script, the summary above Approve needs it — and
 `pages/consent-nojs-light.png` is what a browser with the script blocked gets.
 
-![The consent screen](ui/screenshots/pages/consent-light.png)
+![The consent screen](images/consent-light.png)
 
 The audit page has two: `pages/audit-light.png` is the page as served, which is the state it
 is designed for — a table scanned down its columns for the one row that is not ordinary — and

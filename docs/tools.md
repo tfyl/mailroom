@@ -487,6 +487,45 @@ the provider. `delegates` is unsupported on every Gmail account, because it need
 would be refused anyway, delegation being a Workspace feature. Either way the answer is a
 refusal rather than an empty delegate list that reads as "nobody is delegated".
 
+## Message bodies
+
+`mail_get_message`, and each message in `mail_get_thread`, carries the body three ways:
+
+```jsonc
+{
+  "body":        "Please complete our: [Change of Ownership form]",
+  "body_source": "text",                 // text | html: which part `body` came from
+  "links": [                             // always present; [] when there is no HTML
+    { "text": "Change of Ownership form", "url": "https://forms.example.com/…" }
+  ],
+  "has_html":    true,
+  "html":        "<html>…",              // only with include_html: true
+  "html_truncated": 248113               // only when html was cut; the full size in bytes
+}
+```
+
+- **`body`** is plain text, as it always was. When the sender attached a text/plain part it is
+  that part, unchanged. When they did not, it used to be the raw HTML; it is now the HTML
+  rendered as text, with each link written after its words as `text (url)`, and
+  `body_source` says `html`. Graph and Zoho hand back a single body that is usually HTML, so on
+  those providers this is the common case rather than the exception.
+- **`links`** is every distinct link target in the HTML part, in document order, each under
+  the first words that named it. It is taken from the HTML even when a text part exists,
+  because the text part is exactly where senders keep a button's words and drop its address.
+  Fragments, `javascript:`, `data:` and `cid:` targets are left out; an image-only link is
+  named by its `alt`. At most 200 are listed; past that, `links_truncated` gives the total.
+- **`html`** is the raw text/html part, and it is opt-in through `include_html`. It is the
+  largest thing a message carries and is rarely what a caller needs once the text and links
+  are in hand. It is capped at 100 KiB per message, cut on a character boundary, and
+  `html_truncated` then gives the full size. `links` and `body` are always computed from the
+  whole document, so the cap never costs a link.
+
+**Tracking redirects are returned as written, never followed.** Resolving one is a request to
+a third party the sender chose, and for the links that matter most — an unsubscribe, a
+confirmation, a one-time form — following the link *is* the action. Reading a message must
+not do that on the reader's behalf, so the `url` is the raw `href`, entity-decoded and
+otherwise untouched.
+
 ## Attachments
 
 **No attachment's bytes travel through the conversation in either direction.** Both ways

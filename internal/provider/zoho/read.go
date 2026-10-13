@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tfyl/mailroom/internal/htmltext"
 	mmail "github.com/tfyl/mailroom/internal/mail"
 )
 
@@ -271,7 +272,10 @@ func (p *Provider) Get(ctx context.Context, id mmail.ScopedID) (mmail.Message, e
 	meta.FolderID = flexString(folderID)
 
 	out := p.convert(meta)
-	if strings.Contains(strings.ToLower(detail.Content), "<html") {
+	// The content endpoint does not say which it returned, and a message composed in a web
+	// client comes back as a fragment with no <html> around it. Taking that for text put
+	// markup in the body and lost every link in it.
+	if htmltext.LooksLikeHTML(detail.Content) {
 		out.Body.HTML = detail.Content
 	} else {
 		out.Body.Text = detail.Content

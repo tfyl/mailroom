@@ -104,7 +104,9 @@ func collectParts(part *gmail.MessagePart, out *mmail.Message) {
 	filename := strings.TrimSpace(part.Filename)
 	if filename != "" && part.Body != nil && part.Body.AttachmentId != "" {
 		out.Attachments = append(out.Attachments, attachmentRef(part))
-	} else if part.Body != nil && part.Body.Data != "" {
+	} else if filename == "" && part.Body != nil && part.Body.Data != "" {
+		// A named part is a file even when Gmail inlined its bytes: an attached .html is not
+		// the message, and taking it for one replaces the body with somebody's document.
 		if data, err := decodeBase64URL(part.Body.Data); err == nil {
 			switch {
 			case strings.HasPrefix(part.MimeType, "text/plain") && out.Body.Text == "":

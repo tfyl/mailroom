@@ -356,7 +356,9 @@ func (p *Provider) Get(ctx context.Context, id mmail.ScopedID) (mmail.Message, e
 // slow answer instead of a wrong one.
 func (p *Provider) GetThread(ctx context.Context, id mmail.ScopedID) (mmail.Thread, error) {
 	query := url.Values{}
-	query.Set("$select", listFields)
+	// messageFields rather than listFields: a thread is read for what was said in it, and
+	// listing it without bodies returned every message in the conversation with none.
+	query.Set("$select", messageFields)
 	query.Set("$top", "200")
 	query.Set("$filter", "conversationId eq "+quoteOData(id.Native))
 

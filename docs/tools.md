@@ -520,6 +520,13 @@ refusal rather than an empty delegate list that reads as "nobody is delegated".
   `html_truncated` then gives the full size. `links` and `body` are always computed from the
   whole document, so the cap never costs a link.
 
+Every message in a `mail_get_thread` result carries the same fields, on every provider. Graph,
+IMAP and Zoho build a thread from a listing that has no content, so each of them fetches the
+bodies separately: Graph by selecting `body` on the conversation query, IMAP and Zoho with one
+read per message. IMAP reads with `BODY.PEEK`, so opening a message or a thread never marks
+anything read. The conformance suite checks that a thread's messages carry the body `Get`
+returns for each of them.
+
 **Tracking redirects are returned as written, never followed.** Resolving one is a request to
 a third party the sender chose, and for the links that matter most — an unsubscribe, a
 confirmation, a one-time form — following the link *is* the action. Reading a message must

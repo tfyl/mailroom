@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -82,5 +83,60 @@ func TestTheHTMLBodyIsFoundInEveryShape(t *testing.T) {
 				t.Errorf("inline attachments = %d, want %d", inline, tc.inlineImages)
 			}
 		})
+	}
+}
+
+func htmlMessage(subject, id, link string) string {
+	return strings.Join([]string{
+		"From: Sender <sender@example.com>", "To: operator@example.com",
+		"Subject: " + subject, "Date: Mon, 03 Aug 2026 12:00:00 +0000",
+		"Message-ID: <" + id + "@example.com>", "MIME-Version: 1.0",
+		"Content-Type: text/html; charset=utf-8", "",
+		`<p><a href="` + link + `">Open</a></p>`, "",
+	}, "\r\n")
+}
+
+// A derived thread is grouped from a search, which answers with envelopes alone. Every message
+// but the one asked for used to come back with no body, so a thread's links were the first
+// message's links and nobody else's — and reading them must not mark the rest as read.
+func TestEveryMessageInAThreadHasItsBody(t *testing.T) {
+	addr, _, user, pass := startServerWith(t, []string{
+		htmlMessage("Change of ownership", "one", "https://example.com/1"),
+		htmlMessage("Re: Change of ownership", "two", "https://example.com/2"),
+	})
+	p, err := New(context.Background(), mmail.Account{
+		ID: "acct_imap", Alias: "imap", Address: "operator@example.com",
+		Provider: mmail.ProviderIMAP, Status: mmail.StatusLinked,
+	}, Config{Host: addr, Username: user, Password: pass, TLS: false})
+	if err != nil {
+		t.Fatalf("connecting: %v", err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
+
+	page, err := p.Search(context.Background(), mmail.Query{Subject: "Change of ownership"}, "")
+	if err != nil || len(page.Items) != 2 {
+		t.Fatalf("search: %v, %d items", err, len(page.Items))
+	}
+	var first mmail.Message
+	for _, m := range page.Items {
+		if !strings.HasPrefix(m.Subject, "Re:") {
+			first = m
+		}
+	}
+
+	thread, err := p.GetThread(context.Background(), first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(thread.Messages) != 2 {
+		t.Fatalf("thread has %d messages, want 2", len(thread.Messages))
+	}
+	for _, m := range thread.Messages {
+		if !strings.Contains(m.Body.HTML, "https://example.com/") {
+			t.Errorf("%q came back with no HTML body: %+v", m.Subject, m.Body)
+		}
+		if m.Flags.Read {
+			t.Errorf("reading the thread marked %q as read", m.Subject)
+		}
 	}
 }

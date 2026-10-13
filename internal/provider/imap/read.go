@@ -171,12 +171,15 @@ func (p *Provider) Get(ctx context.Context, id mmail.ScopedID) (mmail.Message, e
 		return mmail.Message{}, err
 	}
 
+	// PEEK, because reading a message through a tool is not the operator reading it. The
+	// mailbox is examined read-only as well, but a server that does not honour that sets
+	// \Seen on a plain BODY[] fetch — and a thread fetches every message in it.
 	set := imap.UIDSetNum(uid)
 	cmd := p.client.Fetch(set, &imap.FetchOptions{
 		Envelope:    true,
 		Flags:       true,
 		UID:         true,
-		BodySection: []*imap.FetchItemBodySection{{}},
+		BodySection: []*imap.FetchItemBodySection{{Peek: true}},
 	})
 	defer cmd.Close()
 
@@ -327,9 +330,17 @@ func (p *Provider) GetThread(ctx context.Context, id mmail.ScopedID) (mmail.Thre
 		if m.ID.String() == root.ID.String() {
 			continue
 		}
-		if normalizeSubject(m.Subject) == normalized {
-			thread.Messages = append(thread.Messages, m)
+		if normalizeSubject(m.Subject) != normalized {
+			continue
 		}
+		// The search answers with envelopes, which is enough to group by and not enough to
+		// read: every message but the first came back with no body. Get examines the mailbox
+		// read-only, so fetching each one in full marks nothing as read. A message that
+		// cannot be fetched keeps its envelope rather than leaving the thread.
+		if full, err := p.Get(ctx, m.ID); err == nil {
+			m = full
+		}
+		thread.Messages = append(thread.Messages, m)
 	}
 	sort.Slice(thread.Messages, func(i, j int) bool {
 		return thread.Messages[i].Date.Before(thread.Messages[j].Date)

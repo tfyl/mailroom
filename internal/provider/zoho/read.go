@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tfyl/mailroom/internal/htmltext"
 	mmail "github.com/tfyl/mailroom/internal/mail"
 )
 
@@ -258,10 +259,8 @@ func (p *Provider) Get(ctx context.Context, id mmail.ScopedID) (mmail.Message, e
 		return mmail.Message{}, err
 	}
 
-	var detail struct {
-		Content string `json:"content"`
-	}
-	if err := p.get(ctx, base+"/content", nil, &detail); err != nil {
+	body, err := p.content(ctx, folderID, messageID)
+	if err != nil {
 		return mmail.Message{}, err
 	}
 
@@ -271,11 +270,7 @@ func (p *Provider) Get(ctx context.Context, id mmail.ScopedID) (mmail.Message, e
 	meta.FolderID = flexString(folderID)
 
 	out := p.convert(meta)
-	if strings.Contains(strings.ToLower(detail.Content), "<html") {
-		out.Body.HTML = detail.Content
-	} else {
-		out.Body.Text = detail.Content
-	}
+	out.Body = body
 
 	// The manifest is a third request, made only when the message says it has one. Without
 	// it the attachments capability is unreachable rather than merely awkward: GetAttachment
@@ -403,6 +398,15 @@ func (p *Provider) GetThread(ctx context.Context, id mmail.ScopedID) (mmail.Thre
 		converted := p.convert(m)
 		if converted.ID.String() == anchor.ID.String() {
 			continue
+		}
+		// The listing carries no content, so every message but the anchor came back with no
+		// body. One request each for the content alone: the details and the manifest that
+		// Get also fetches are already in the listing or not needed to read the thread. A
+		// message whose content cannot be fetched stays in the thread without it.
+		if folder, message, err := splitNative(converted.ID.Native); err == nil {
+			if body, err := p.content(ctx, folder, message); err == nil {
+				converted.Body = body
+			}
 		}
 		thread.Messages = append(thread.Messages, converted)
 	}
@@ -592,4 +596,22 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// content fetches a message's body. The content endpoint does not say which kind it
+// returned, and a message composed in a web client comes back as a fragment with no <html>
+// around it, so the kind is read off the markup: taking such a fragment for text put markup
+// in the body and lost every link in it.
+func (p *Provider) content(ctx context.Context, folderID, messageID string) (mmail.Body, error) {
+	var detail struct {
+		Content string `json:"content"`
+	}
+	path := fmt.Sprintf("/accounts/%s/folders/%s/messages/%s/content", p.accountID, folderID, messageID)
+	if err := p.get(ctx, path, nil, &detail); err != nil {
+		return mmail.Body{}, err
+	}
+	if htmltext.LooksLikeHTML(detail.Content) {
+		return mmail.Body{HTML: detail.Content}, nil
+	}
+	return mmail.Body{Text: detail.Content}, nil
 }

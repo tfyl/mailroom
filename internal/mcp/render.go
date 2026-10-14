@@ -3,12 +3,14 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tfyl/mailroom/internal/blob"
+	"github.com/tfyl/mailroom/internal/htmltext"
 	"github.com/tfyl/mailroom/internal/mail"
 )
 
@@ -214,7 +216,7 @@ func summarize(messages []mail.Message, accounts []mail.Account) []map[string]an
 // fullMessage takes the account as well as the message because a single-message read has no
 // per-account status block to carry the address, and the alias on the message alone does not
 // say which mailbox was opened.
-func fullMessage(m mail.Message, acct mail.Account) map[string]any {
+func fullMessage(m mail.Message, acct mail.Account, includeHTML bool) map[string]any {
 	attachments := make([]map[string]any, len(m.Attachments))
 	for i, a := range m.Attachments {
 		attachments[i] = map[string]any{
@@ -226,12 +228,7 @@ func fullMessage(m mail.Message, acct mail.Account) map[string]any {
 		}
 	}
 
-	body := m.Body.Text
-	if body == "" {
-		body = m.Body.HTML
-	}
-
-	return map[string]any{
+	out := map[string]any{
 		"id":              m.ID.String(),
 		"thread_id":       m.ThreadID.String(),
 		"account":         m.Account,
@@ -243,9 +240,73 @@ func fullMessage(m mail.Message, acct mail.Account) map[string]any {
 		"date":            m.Date.Format(time.RFC3339),
 		"unread":          !m.Flags.Read,
 		"starred":         m.Flags.Starred,
-		"body":            body,
 		"attachments":     attachments,
 	}
+	renderBody(out, m.Body, includeHTML)
+	return out
+}
+
+// maxHTMLBytes caps the `html` field of one message. Marketing mail routinely carries
+// 100–300 KB of inline CSS and nested layout tables, almost none of it words, and a thread
+// returns every message's copy. The links and the rendered text are taken from the whole
+// document before the cut, so truncating here loses markup and never a link.
+const maxHTMLBytes = 100 << 10
+
+// maxLinks bounds the `links` list. A newsletter can carry several hundred anchors, most of
+// them the same footer repeated per article; a message whose point is one link has a
+// handful.
+const maxLinks = 200
+
+// renderBody fills in the body fields of a message.
+//
+// `body` stays plain text, because that is what every caller written before this read it as.
+// When the sender attached no text/plain part it used to be the raw HTML, which put a
+// stylesheet in front of the words; it is now the HTML rendered as text with each link's
+// target written after its words. `links` is taken from the HTML even when a text part
+// exists, because the text part is exactly where senders drop the address and keep the
+// words. `html` itself is opt-in: it is the largest thing a message carries and is rarely
+// what a caller needs once the text and the links are already in hand.
+func renderBody(out map[string]any, body mail.Body, includeHTML bool) {
+	links := []htmltext.Link{}
+	out["body"] = body.Text
+	out["body_source"] = "text"
+	if body.HTML != "" {
+		r := htmltext.Render(body.HTML)
+		if r.Links != nil {
+			links = r.Links
+		}
+		if strings.TrimSpace(body.Text) == "" {
+			out["body"] = r.Text
+			out["body_source"] = "html"
+		}
+	}
+	if len(links) > maxLinks {
+		out["links_truncated"] = len(links)
+		links = links[:maxLinks]
+	}
+	out["links"] = links
+	out["has_html"] = body.HTML != ""
+
+	if includeHTML && body.HTML != "" {
+		html := body.HTML
+		if len(html) > maxHTMLBytes {
+			html = truncateUTF8(html, maxHTMLBytes)
+			out["html_truncated"] = len(body.HTML)
+		}
+		out["html"] = html
+	}
+}
+
+// truncateUTF8 cuts s to at most n bytes without splitting a character, which would leave
+// the JSON encoder to substitute a replacement rune for half of one.
+func truncateUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 func addresses(in []mail.Address) []string {

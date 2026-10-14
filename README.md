@@ -287,7 +287,7 @@ rather than silently generating one you would lose on the next redeploy.
 | Tool | Covers | Requires |
 |---|---|---|
 | `mail_search` | Query one or many accounts, paginated | `read` |
-| `mail_get_message` | Full body, headers, attachment manifest | `read` |
+| `mail_get_message` | Full body, the links in it, headers, attachment manifest | `read` |
 | `mail_get_thread` | Whole conversation in order | `read` |
 | `mail_get_attachment` | A signed download URL — or a small text file inline, if you ask | `attachments` |
 | `mail_draft` | Create, update, or reply-draft, with attachments | `draft` |

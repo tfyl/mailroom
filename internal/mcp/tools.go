@@ -121,12 +121,18 @@ func (t *Tools) Register(srv *mcp.Server, g *grant.Grant) {
 			t.handleSearch)
 
 		mcp.AddTool(srv, tool("mail_get_message",
-			"Fetch one message in full, including body and attachment manifest."),
+			"Fetch one message in full, including body and attachment manifest. `body` is "+
+				"plain text; when the message has no text part it is rendered from the HTML, with "+
+				"each link written as `text (url)`. `links` lists every link target in the HTML "+
+				"as {text, url}, even when the text part dropped them, so look there for a button "+
+				"or form link. Tracking redirects are returned as written, not followed. Pass "+
+				"`include_html` for the raw HTML."),
 			t.handleGetMessage)
 
 		mcp.AddTool(srv, tool("mail_get_thread",
 			"Fetch a whole conversation in order. Check `derived`: when true the "+
-				"grouping was inferred from headers rather than reported by the provider."),
+				"grouping was inferred from headers rather than reported by the provider. Each "+
+				"message has the same body fields as mail_get_message, including `links`."),
 			t.handleGetThread)
 	}
 
@@ -428,7 +434,8 @@ func (t *Tools) handleSearch(ctx context.Context, _ *mcp.CallToolRequest, args s
 // --- single-message tools ---
 
 type idArgs struct {
-	ID string `json:"id" jsonschema:"Message or thread id from a search result. Opaque; pass it back unchanged."`
+	ID          string `json:"id" jsonschema:"Message or thread id from a search result. Opaque; pass it back unchanged."`
+	IncludeHTML bool   `json:"include_html,omitempty" jsonschema:"Also return the raw text/html part as html, capped at 100 KiB per message (html_truncated then gives the full size). Rarely needed: body and links are already derived from the HTML."`
 }
 
 func (t *Tools) handleGetMessage(ctx context.Context, _ *mcp.CallToolRequest, args idArgs) (*mcp.CallToolResult, any, error) {
@@ -467,7 +474,7 @@ func (t *Tools) handleGetMessage(ctx context.Context, _ *mcp.CallToolRequest, ar
 	}, err); err != nil {
 		return toolError(err), nil, nil
 	}
-	return result(fullMessage(msg, acct))
+	return result(fullMessage(msg, acct, args.IncludeHTML))
 }
 
 func (t *Tools) handleGetThread(ctx context.Context, _ *mcp.CallToolRequest, args idArgs) (*mcp.CallToolResult, any, error) {
@@ -506,7 +513,7 @@ func (t *Tools) handleGetThread(ctx context.Context, _ *mcp.CallToolRequest, arg
 
 	messages := make([]map[string]any, len(thread.Messages))
 	for i, m := range thread.Messages {
-		messages[i] = fullMessage(m, acct)
+		messages[i] = fullMessage(m, acct, args.IncludeHTML)
 	}
 	return result(map[string]any{
 		"id":              thread.ID.String(),

@@ -294,6 +294,32 @@ func liveThreads(ctx context.Context, t *testing.T, h Harness) {
 				thread.Derived, map[bool]string{true: "does", false: "does not"}[declared])
 		}
 	})
+
+	// A thread is read for what was said in it. Three of the four providers once built a
+	// thread from a listing that carries no content, so every message but the one asked for
+	// came back blank — no text and no links — and nothing failed, because a blank body looks
+	// exactly like a short one.
+	t.Run("thread messages carry the body get returns", func(t *testing.T) {
+		page, err := messages.Search(ctx, h.SearchAll, "")
+		if err != nil || len(page.Items) == 0 {
+			t.Skip("the search above already failed; fix that first")
+		}
+
+		thread, err := reader.GetThread(ctx, page.Items[0].ThreadID)
+		if err != nil {
+			t.Fatalf("get thread failed: %v", err)
+		}
+		for _, m := range thread.Messages {
+			full, err := messages.Get(ctx, m.ID)
+			if err != nil {
+				t.Errorf("thread message %s did not resolve through Get: %v", m.ID, err)
+				continue
+			}
+			if (full.Body.Text != "") && m.Body.Text == "" || (full.Body.HTML != "") && m.Body.HTML == "" {
+				t.Errorf("thread message %s came back without the body Get returns for it", m.ID)
+			}
+		}
+	})
 }
 
 // liveFilters reads the existing filters. Read-only: creating one changes how the mailbox

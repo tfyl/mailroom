@@ -190,7 +190,10 @@ func (o *OIDC) Authorize(op Operator) error {
 // id_token to it, so a token minted for a different flow cannot be replayed into this one.
 // Neither is optional in OAuth 2.1, and both are cheap.
 func (o *OIDC) StartLogin(w http.ResponseWriter, r *http.Request) bool {
-	next := safeNext(firstNonEmpty(r.URL.Query().Get("next"), r.URL.Path))
+	// The whole request URI, not just the path. /authorize is behind this login, and an MCP
+	// client's authorization request lives entirely in its query: dropping it returned the
+	// operator to an /authorize that no longer named a client.
+	next := safeNext(firstNonEmpty(r.URL.Query().Get("next"), r.URL.RequestURI()))
 
 	verifier := oauth2.GenerateVerifier()
 	nonce, err := randomToken(16)

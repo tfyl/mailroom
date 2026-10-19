@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -139,8 +140,10 @@ func (r *Registry) StartLogin(w http.ResponseWriter, req *http.Request) bool {
 		return false
 	}
 
-	next := req.URL.Path
-	http.Redirect(w, req, "/login?next="+next, http.StatusSeeOther)
+	// Escaped, because the destination carries its own query: unescaped, its parameters
+	// would become the login page's and only the first would survive as next.
+	next := req.URL.RequestURI()
+	http.Redirect(w, req, "/login?next="+url.QueryEscape(next), http.StatusSeeOther)
 	return true
 }
 

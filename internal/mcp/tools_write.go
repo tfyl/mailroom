@@ -14,6 +14,7 @@ import (
 	"github.com/tfyl/mailroom/internal/blob"
 	"github.com/tfyl/mailroom/internal/grant"
 	"github.com/tfyl/mailroom/internal/held"
+	"github.com/tfyl/mailroom/internal/htmltext"
 	"github.com/tfyl/mailroom/internal/mail"
 )
 
@@ -106,7 +107,7 @@ type composeArgs struct {
 	Cc          []addressArg      `json:"cc,omitempty"`
 	Bcc         []addressArg      `json:"bcc,omitempty"`
 	Subject     string            `json:"subject,omitempty"`
-	Body        string            `json:"body,omitempty" jsonschema:"Plain text body"`
+	Body        string            `json:"body,omitempty" jsonschema:"Plain text body. Without html, an HTML alternative is derived from it so webmail clients do not hard-wrap it."`
 	HTML        string            `json:"html,omitempty" jsonschema:"Optional HTML alternative"`
 	Attachments []attachmentInput `json:"attachments,omitempty" jsonschema:"Files to attach. Reuse one already in a mailbox with from_message and attachment_id, name an upload with blob_id, or supply small new content inline as base64."`
 }
@@ -969,7 +970,14 @@ func describeModify(add, remove []mail.LabelID, flags mail.FlagUpdate) string {
 	return strings.Join(parts, " ")
 }
 
+// outgoing builds the message a compose call describes. A text-only body gets an HTML
+// alternative derived from it; see htmltext.FromText for why a text-only message is not safe
+// to hand to a webmail client.
 func (t *Tools) outgoing(acct mail.Account, args composeArgs, replyTo mail.ScopedID, attachments []mail.Attachment) mail.Outgoing {
+	body := mail.Body{Text: args.Body, HTML: args.HTML}
+	if body.HTML == "" && strings.TrimSpace(body.Text) != "" {
+		body.HTML = htmltext.FromText(body.Text)
+	}
 	return mail.Outgoing{
 		Account:     acct.ID,
 		InReplyTo:   replyTo,
@@ -977,7 +985,7 @@ func (t *Tools) outgoing(acct mail.Account, args composeArgs, replyTo mail.Scope
 		Cc:          toAddresses(args.Cc),
 		Bcc:         toAddresses(args.Bcc),
 		Subject:     args.Subject,
-		Body:        mail.Body{Text: args.Body, HTML: args.HTML},
+		Body:        body,
 		Attachments: attachments,
 	}
 }

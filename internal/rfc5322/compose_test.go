@@ -1,6 +1,11 @@
 package rfc5322
 
 import (
+	"bytes"
+	"io"
+	"mime"
+	"mime/multipart"
+	netmail "net/mail"
 	"strings"
 	"testing"
 
@@ -175,5 +180,55 @@ func TestComposePlainOnlyStaysSinglePart(t *testing.T) {
 	}
 	if !strings.Contains(got, "Content-Type: text/plain; charset=utf-8") {
 		t.Errorf("expected a plain text content type, got:\n%s", got)
+	}
+}
+
+// An attachment must not cost the message its HTML half: the alternative nests inside the
+// mixed part, ahead of the file.
+func TestComposeAttachmentKeepsBothBodies(t *testing.T) {
+	raw, err := Compose(mail.Outgoing{
+		To:      to("a@example.com"),
+		Subject: "report",
+		Body:    mail.Body{Text: "see attached", HTML: "<p>see attached</p>"},
+		Attachments: []mail.Attachment{{
+			AttachmentRef: mail.AttachmentRef{Filename: "report.csv", MimeType: "text/csv"},
+			Content:       []byte("a,b\n"),
+		}},
+	}, "me@example.com", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, err := netmail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, params, _ := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	mixed := multipart.NewReader(msg.Body, params["boundary"])
+
+	first, err := mixed.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaType, altParams, _ := mime.ParseMediaType(first.Header.Get("Content-Type"))
+	if mediaType != "multipart/alternative" {
+		t.Fatalf("first part is %q, want multipart/alternative", mediaType)
+	}
+	alt := multipart.NewReader(first, altParams["boundary"])
+	var types []string
+	for {
+		p, err := alt.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		types = append(types, strings.SplitN(p.Header.Get("Content-Type"), ";", 2)[0])
+	}
+	if strings.Join(types, ",") != "text/plain,text/html" {
+		t.Errorf("alternatives = %v, want text/plain then text/html", types)
+	}
+	if file, err := mixed.NextPart(); err != nil || file.FileName() != "report.csv" {
+		t.Errorf("attachment part missing after the body: %v", err)
 	}
 }

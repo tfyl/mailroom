@@ -110,12 +110,7 @@ func writeMixed(buf *bytes.Buffer, out mail.Outgoing) ([]byte, error) {
 		return nil, err
 	}
 
-	body := out.Body.Text
-	contentType := "text/plain; charset=utf-8"
-	if body == "" && out.Body.HTML != "" {
-		body, contentType = out.Body.HTML, "text/html; charset=utf-8"
-	}
-	if err := writePart(w, contentType, body); err != nil {
+	if err := writeBody(w, out.Body); err != nil {
 		return nil, err
 	}
 
@@ -162,6 +157,36 @@ func attachmentType(mediaType string) string {
 		return formatted
 	}
 	return "application/octet-stream"
+}
+
+// writeBody writes a mixed message's body part: both alternatives when there are two, so that
+// attaching a file does not quietly drop the HTML half.
+func writeBody(w *multipart.Writer, body mail.Body) error {
+	switch {
+	case body.Text != "" && body.HTML != "":
+		inner := multipart.NewWriter(&bytes.Buffer{})
+		h := textproto.MIMEHeader{}
+		h.Set("Content-Type", fmt.Sprintf("multipart/alternative; boundary=%q", inner.Boundary()))
+		part, err := w.CreatePart(h)
+		if err != nil {
+			return err
+		}
+		alt := multipart.NewWriter(part)
+		if err := alt.SetBoundary(inner.Boundary()); err != nil {
+			return err
+		}
+		if err := writePart(alt, "text/plain; charset=utf-8", body.Text); err != nil {
+			return err
+		}
+		if err := writePart(alt, "text/html; charset=utf-8", body.HTML); err != nil {
+			return err
+		}
+		return alt.Close()
+	case body.Text == "" && body.HTML != "":
+		return writePart(w, "text/html; charset=utf-8", body.HTML)
+	default:
+		return writePart(w, "text/plain; charset=utf-8", body.Text)
+	}
 }
 
 func writePart(w *multipart.Writer, contentType, body string) error {

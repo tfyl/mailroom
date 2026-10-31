@@ -176,6 +176,22 @@ func TestOutgoingCarriesAttachments(t *testing.T) {
 	}
 }
 
+// A text-only body gains a derived HTML alternative, because a text-only draft puts Gmail into
+// plain-text compose, which hard-wraps the message when it is sent. An HTML body the caller
+// wrote is left alone.
+func TestOutgoingDerivesHTMLFromText(t *testing.T) {
+	tools := &Tools{}
+	out := tools.outgoing(mail.Account{ID: "acct_1"}, composeArgs{Body: "Hi,\n\nSee you."}, mail.ScopedID{}, nil)
+	if out.Body.Text != "Hi,\n\nSee you." || !strings.Contains(out.Body.HTML, "Hi,<br>\n<br>\nSee you.") {
+		t.Errorf("body = %+v", out.Body)
+	}
+
+	out = tools.outgoing(mail.Account{ID: "acct_1"}, composeArgs{Body: "plain", HTML: "<p>mine</p>"}, mail.ScopedID{}, nil)
+	if out.Body.HTML != "<p>mine</p>" {
+		t.Errorf("caller's HTML was replaced: %q", out.Body.HTML)
+	}
+}
+
 // A blob_id that does not resolve, and what the caller is told to do about it.
 //
 // The sentinels underneath are accurate and useless on their own: "blob has expired" and "no

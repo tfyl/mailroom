@@ -38,12 +38,15 @@ func TestSearchExpressionUsesZohosOwnSyntax(t *testing.T) {
 			want: "subject:invoice",
 		},
 		{
-			name: "dates are days, not epochs",
+			// Search serves date bounds in the gateway; sending them as well would put back
+			// the half of the query whose failure Zoho reports as an empty success.
+			name: "dates are never sent, they are filtered",
 			q: mmail.Query{
+				Raw:    "accountant",
 				After:  time.Date(2026, 3, 1, 9, 30, 0, 0, time.UTC),
 				Before: time.Date(2026, 4, 2, 18, 0, 0, 0, time.UTC),
 			},
-			want: "fromDate:01-Mar-2026::toDate:02-Apr-2026",
+			want: "entire:accountant",
 		},
 		{
 			name: "several terms join with ::",

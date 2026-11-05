@@ -240,7 +240,7 @@ func TestFreeTextQueriesUseSearchAlone(t *testing.T) {
 	}
 
 	search := query.Get("$search")
-	for _, want := range []string{`subject:"quarterly report"`, "from:ada@example.com"} {
+	for _, want := range []string{`subject:\"quarterly report\"`, "from:ada@example.com"} {
 		if !strings.Contains(search, want) {
 			t.Errorf("$search = %q, missing %q", search, want)
 		}
@@ -748,5 +748,52 @@ func TestEmptyRecipientCollectionsAreSentAsArraysNotNull(t *testing.T) {
 	}
 	if _, ok := got["toRecipients"].([]any); !ok {
 		t.Errorf("toRecipients = %#v, want an array", got["toRecipients"])
+	}
+}
+
+// A caller's own quoted phrase used to close $search's outer quote early, and Graph refused
+// the whole search with HTTP 400 "An identifier was expected at position 0". Inner quotes
+// are escaped with a backslash, the form Graph's $search syntax rules give.
+func TestQuotedPhraseIsEscapedInsideSearch(t *testing.T) {
+	var query url.Values
+	p := testProvider(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		writeJSON(t, w, messagePage{})
+	})
+
+	if _, err := p.Search(context.Background(), mmail.Query{Raw: `"microsoft account"`}, ""); err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if got, want := query.Get("$search"), `"\"microsoft account\""`; got != want {
+		t.Errorf("$search = %s, want %s", got, want)
+	}
+}
+
+// Dates beside a search term are served in the gateway: the term alone goes to Graph, and
+// what comes back newest first is cut to the window here.
+func TestDatesBesideSearchTermsAreFilteredInTheGateway(t *testing.T) {
+	var query url.Values
+	p := testProvider(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		writeJSON(t, w, messagePage{Value: []message{
+			{ID: "new", Subject: "microsoft", ReceivedDateTime: "2026-10-05T00:00:00Z"},
+			{ID: "old", Subject: "microsoft", ReceivedDateTime: "2026-09-01T00:00:00Z"},
+		}})
+	})
+
+	page, err := p.Search(context.Background(), mmail.Query{
+		Raw: "microsoft", After: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+	}, "")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if s := query.Get("$search"); s != `"microsoft"` {
+		t.Errorf("only the term should reach Graph; $search = %s", s)
+	}
+	if len(page.Items) != 1 || page.Items[0].Date.Month() != time.October {
+		t.Fatalf("want only the October message, got %+v", page.Items)
+	}
+	if page.Cursor != "" {
+		t.Errorf("the listing ran past After, so the search is finished; cursor %q", page.Cursor)
 	}
 }

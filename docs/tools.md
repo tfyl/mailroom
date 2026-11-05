@@ -176,6 +176,20 @@ is absent when `complete` is true, so its presence always means something, and a
 incomplete result carried no rows at all: that search was cut short by a mailbox that failed
 rather than by the limit, and the `accounts` block is where that is already explained.
 
+**Date operators mean the same thing on every mailbox.** `after:`, `before:`, `newer:`,
+`older:`, `newer_than:` and `older_than:` are lifted out of `query` by the gateway before any
+provider sees it, and travel as structured bounds. They used to be passed through as text,
+which only Gmail understands, and the failures were all empty successes: Zoho searched for the
+literal phrase `assessment after:2026-11-01`, Outlook's KQL has no `after:` property, and Gmail
+itself reads `after:2026-10-20T07:00:00Z` as nothing. Now Gmail and IMAP render the bounds
+natively, Zoho and Outlook keyword searches fetch the keyword alone newest first and filter by
+date in the gateway, and the merged result is cut to the window once more so a provider that
+only knows whole days cannot widen it. Values may be `YYYY-MM-DD`, `YYYY/MM/DD`, an RFC 3339
+time, Unix seconds, or `Nd`/`Nm`/`Ny` for the relative forms; a bare date is midnight UTC,
+`after:` inclusive and `before:` exclusive. A value the gateway cannot read is refused with an
+error — never passed on to match nothing — and when a bound was read, a `query` block in the
+result says what it was read as.
+
 If *every* account fails, the call returns an error rather than an empty success.
 
 Per-account statuses: `ok`, `rate_limited`, `auth_expired`, `unsupported`, `timeout`, `error`.

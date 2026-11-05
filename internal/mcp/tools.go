@@ -318,7 +318,7 @@ func (t *Tools) handleAccounts(ctx context.Context, _ *mcp.CallToolRequest, _ ac
 
 type searchArgs struct {
 	Account       any    `json:"account,omitempty" jsonschema:"Mailbox alias, address, or a list of either. Omit to search every mailbox this grant allows."`
-	Query         string `json:"query,omitempty" jsonschema:"Provider search syntax, for example Gmail's from:x is:unread"`
+	Query         string `json:"query,omitempty" jsonschema:"Provider search syntax, for example Gmail's from:x is:unread. Date operators after:, before:, newer:, older:, newer_than: and older_than: work on every provider (YYYY-MM-DD, RFC 3339 time, Unix seconds, or Nd/Nm/Ny) and are applied by the gateway."`
 	From          string `json:"from,omitempty"`
 	To            string `json:"to,omitempty"`
 	Subject       string `json:"subject,omitempty"`
@@ -347,9 +347,22 @@ func (t *Tools) handleSearch(ctx context.Context, _ *mcp.CallToolRequest, args s
 		return toolError(err), nil, nil
 	}
 
+	// Date operators come out of the free text before any provider sees it. Left in, they
+	// reached Zoho as part of a quoted phrase, Outlook as a KQL property it has no idea of,
+	// and Gmail as an ISO time it cannot read — and all three answered an empty success. As
+	// structured bounds every provider renders them its own way or the gateway filters on
+	// them, and a date that cannot be read is refused here rather than matching nothing.
+	dates, err := mail.ExtractDateOperators(args.Query, time.Now())
+	if err != nil {
+		return t.invalid(ctx, g, grant.Audit{
+			Tool: "mail.search", Capability: mail.CapRead,
+		}, err), nil, nil
+	}
+
 	q := mail.Query{
-		Raw: args.Query, From: args.From, To: args.To, Subject: args.Subject,
+		Raw: dates.Text, From: args.From, To: args.To, Subject: args.Subject,
 		Unread: args.Unread, Starred: args.Starred, HasAttach: args.HasAttachment,
+		After: dates.After, Before: dates.Before,
 		Limit: args.Limit,
 	}
 
@@ -373,6 +386,19 @@ func (t *Tools) handleSearch(ctx context.Context, _ *mcp.CallToolRequest, args s
 		})
 	if err != nil {
 		return toolError(err), nil, nil
+	}
+
+	// The window is applied once more to the merged results. Gmail's epoch bounds are exact,
+	// but IMAP's SINCE and BEFORE are whole days, so without this an IMAP mailbox answers a
+	// timed bound with the rest of the day. It can only remove mail outside what was asked.
+	if q.HasWindow() {
+		kept := res.Items[:0]
+		for _, m := range res.Items {
+			if q.InWindow(m.Date) {
+				kept = append(kept, m)
+			}
+		}
+		res.Items = kept
 	}
 
 	// How many results each mailbox contributed. This is the whole of what a search records
@@ -418,6 +444,17 @@ func (t *Tools) handleSearch(ctx context.Context, _ *mcp.CallToolRequest, args s
 		"accounts": res.Accounts,
 		"cursor":   res.Cursor,
 		"complete": res.Complete,
+	}
+
+	// Said back whenever a date operator was read, so a caller can see the bound it actually
+	// got — a timezone or a typo shows up here rather than as a puzzling result set.
+	if len(dates.Read) > 0 {
+		payload["query"] = map[string]any{
+			"text":  dates.Text,
+			"dates": dates.Read,
+			"note": "date operators are applied by the gateway on every provider, not passed " +
+				"through as text; a bare date is midnight UTC, after: inclusive, before: exclusive",
+		}
 	}
 
 	// Attached only to a result that stopped short, so its presence always means something;

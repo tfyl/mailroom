@@ -56,9 +56,10 @@ const (
 // parameters — and the failure mode is not an error, it is a full unfiltered page that looks
 // exactly like an answer.
 //
-// Date bounds and label scoping are deliberately absent: mail_search exposes neither, so no
-// caller can reach them. They are covered per provider instead, and the day they become tool
-// arguments they belong here.
+// Date bounds and label scoping are absent. Label scoping is not reachable from mail_search.
+// Date bounds are, through the date operators the tool layer lifts out of the query, but two
+// providers serve them in the gateway rather than on the wire, so there is no single wire
+// form to assert; they are covered per provider, and in internal/mail's window tests.
 var QueryTerms = []QueryTerm{
 	{"free text", mail.Query{Raw: textTerm}},
 	{"sender", mail.Query{From: senderTerm}},

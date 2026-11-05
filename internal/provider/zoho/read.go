@@ -64,7 +64,25 @@ func (p *Provider) unsearchable(op, reason string) error {
 // Zoho pages by offset rather than by opaque cursor, so the cursor here carries the next
 // start index. The aggregator never looks inside it, which is what lets one provider page by
 // token and another by offset without the tool layer knowing.
+//
+// Date bounds are served by the gateway rather than sent. Zoho documents fromDate and toDate
+// in its search syntax, but a search Zoho does not understand answers success with nothing
+// rather than an error, and a date bound gone wrong there is indistinguishable from a
+// mailbox with no such mail — which is exactly how "assessment after:2026-11-01" came back
+// empty beside 25 results for "assessment". Both endpoints answer newest first, so filtering
+// here costs at most a few pages and cannot silently lose a match.
 func (p *Provider) Search(ctx context.Context, q mmail.Query, cursor string) (mmail.Page[mmail.Message], error) {
+	if q.HasWindow() {
+		undated := q
+		undated.After, undated.Before = time.Time{}, time.Time{}
+		return mmail.SearchWindow(q, cursor, func(c string) (mmail.Page[mmail.Message], error) {
+			return p.searchPage(ctx, undated, c)
+		})
+	}
+	return p.searchPage(ctx, q, cursor)
+}
+
+func (p *Provider) searchPage(ctx context.Context, q mmail.Query, cursor string) (mmail.Page[mmail.Message], error) {
 	limit := q.Limit
 	if limit <= 0 || limit > 200 {
 		limit = defaultPageSize
@@ -187,10 +205,8 @@ func offsetCursor(cursor string) (int, error) {
 // most: it was sent as a bare word with no field at all, so every plain-language search
 // against a Zoho mailbox found nothing while reporting ok.
 //
-// Dates are their own shape again: Zoho takes fromDate/toDate as DD-MMM-YYYY, not an epoch
-// on a comparison operator. The bound is therefore a whole day rather than an instant, which
-// is wider than the caller asked for — a mail search is not worse for returning the rest of
-// the day, and refusing the filter outright would be.
+// Dates are deliberately not rendered here: Search serves them in the gateway, for the
+// reason given there.
 func searchExpression(q mmail.Query) string {
 	var parts []string
 	if q.Raw != "" {
@@ -205,16 +221,9 @@ func searchExpression(q mmail.Query) string {
 	if q.Subject != "" {
 		parts = append(parts, "subject:"+searchTerm(q.Subject))
 	}
-	if !q.After.IsZero() {
-		parts = append(parts, "fromDate:"+q.After.Format(zohoDate))
-	}
-	if !q.Before.IsZero() {
-		parts = append(parts, "toDate:"+q.Before.Format(zohoDate))
-	}
 	return strings.Join(parts, "::")
 }
 
-// zohoDate is the DD-MMM-YYYY that fromDate and toDate are documented to take.
 // searchTerm renders a term so Zoho reads it as text rather than as syntax.
 //
 // A leading hyphen is the case that matters, because it does not fail — it inverts. Asked for
@@ -236,8 +245,6 @@ func searchTerm(s string) string {
 	}
 	return s
 }
-
-const zohoDate = "02-Jan-2006"
 
 // Get fetches one message: its metadata from /details, its body from /content.
 //

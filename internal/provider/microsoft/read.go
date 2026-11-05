@@ -96,7 +96,24 @@ const defaultPageSize = 50
 // fail silently". A filter Graph ignores comes back as a full unfiltered page that looks
 // exactly like an answer, and a mailbox gateway is the wrong place to find that out. So the
 // half of a query that cannot ride along is refused by name instead.
+//
+// Date bounds beside search terms are served in the gateway. Exchange's KQL has a received
+// property, but a $search Graph does not evaluate as asked answers with an empty success —
+// "microsoft after:2026-10-01" did exactly that — and $search results come newest first, so
+// filtering them here costs a page or two and cannot quietly lose a match. Without search
+// terms the dates stay on $filter, where receivedDateTime is a documented, ordered predicate.
 func (p *Provider) Search(ctx context.Context, q mmail.Query, cursor string) (mmail.Page[mmail.Message], error) {
+	undated := q
+	undated.After, undated.Before = time.Time{}, time.Time{}
+	if q.HasWindow() && searchTerm(undated) != "" {
+		return mmail.SearchWindow(q, cursor, func(c string) (mmail.Page[mmail.Message], error) {
+			return p.searchPage(ctx, undated, c)
+		})
+	}
+	return p.searchPage(ctx, q, cursor)
+}
+
+func (p *Provider) searchPage(ctx context.Context, q mmail.Query, cursor string) (mmail.Page[mmail.Message], error) {
 	if cursor != "" {
 		var page messagePage
 		if err := p.follow(ctx, cursor, &page); err != nil {
@@ -150,7 +167,7 @@ func (p *Provider) Search(ctx context.Context, q mmail.Query, cursor string) (mm
 		}
 		// A $search answers at most a thousand results in total, however far a caller pages,
 		// and is ordered by sent date rather than by anything asked for here.
-		query.Set("$search", `"`+term+`"`)
+		query.Set("$search", searchPhrase(term))
 	} else {
 		filter, orderable := filterExpression(q)
 		if filter != "" {
@@ -254,13 +271,21 @@ func searchTerm(q mmail.Query) string {
 	if q.HasAttach {
 		parts = append(parts, "hasAttachments:true")
 	}
-	if !q.After.IsZero() {
-		parts = append(parts, "received>="+q.After.UTC().Format("2006-01-02"))
-	}
-	if !q.Before.IsZero() {
-		parts = append(parts, "received<="+q.Before.UTC().Format("2006-01-02"))
-	}
+	// Dates are not rendered here: Search serves them in the gateway whenever there is a
+	// search term, for the reason given there.
 	return strings.Join(parts, " AND ")
+}
+
+// searchPhrase wraps a KQL expression as the one quoted OData search phrase $search takes.
+//
+// A quote inside it has to be escaped with a backslash, as does a backslash. Sent bare, a
+// caller's own quoted phrase closed the outer quote early: $search=""microsoft account""
+// was refused with HTTP 400 "An identifier was expected at position 0", so every exact-phrase
+// search against an Outlook mailbox failed.
+func searchPhrase(term string) string {
+	term = strings.ReplaceAll(term, `\`, `\\`)
+	term = strings.ReplaceAll(term, `"`, `\"`)
+	return `"` + term + `"`
 }
 
 // quoteKQL wraps a value so that spaces in it stay one term, and strips the quote character
